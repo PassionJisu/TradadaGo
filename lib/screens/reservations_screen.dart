@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../data/gwangju_markets.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
+import 'write_review_screen.dart';
 
 class ReservationsScreen extends StatelessWidget {
   const ReservationsScreen({super.key});
@@ -40,11 +42,14 @@ class ReservationsScreen extends StatelessWidget {
               else
                 Expanded(
                   child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                     itemCount: items.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, i) {
                       final r = items[i];
+                      final store = GwangjuMarkets.yangdong.stores
+                          .where((s) => s.id == r.storeId)
+                          .firstOrNull;
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -71,6 +76,22 @@ class ReservationsScreen extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
+                            if (store != null &&
+                                AppSession.instance.hasEverVisited(store.id))
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            WriteReviewScreen(store: store),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text('포토 리뷰 쓰기'),
+                                ),
+                              ),
                           ],
                         ),
                       );

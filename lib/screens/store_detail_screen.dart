@@ -6,8 +6,10 @@ import '../models/store.dart';
 import '../state/app_session.dart';
 import '../state/location_session.dart';
 import '../theme/app_colors.dart';
+import '../util/app_notice.dart';
 import '../util/money.dart';
 import 'qr_scan_screen.dart';
+import 'write_review_screen.dart';
 
 class StoreDetailScreen extends StatelessWidget {
   const StoreDetailScreen({super.key, required this.store});
@@ -16,10 +18,15 @@ class StoreDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nearby = LocationSession.instance.isNear(store.position);
-    final stamped = AppSession.instance.hasStamp(store.id);
+    return ListenableBuilder(
+      listenable: AppSession.instance,
+      builder: (context, _) {
+        final nearby = LocationSession.instance.isNear(store.position);
+        final stampedToday =
+            AppSession.instance.hasVisitStampToday(store.id);
+        final visited = AppSession.instance.hasEverVisited(store.id);
 
-    return Scaffold(
+        return Scaffold(
       backgroundColor: AppColors.skyLight,
       appBar: AppBar(
         title: Text(store.name),
@@ -71,10 +78,10 @@ class StoreDetailScreen extends StatelessWidget {
                   store.description,
                   style: const TextStyle(height: 1.4),
                 ),
-                if (stamped) ...[
+                if (stampedToday) ...[
                   const SizedBox(height: 10),
                   const Text(
-                    '오늘 이 가게 스탬프를 이미 받았습니다.',
+                    '오늘 이 가게 방문 스탬프를 이미 받았습니다. (하루 1회)',
                     style: TextStyle(
                       color: AppColors.navy,
                       fontWeight: FontWeight.w700,
@@ -110,17 +117,30 @@ class StoreDetailScreen extends StatelessWidget {
             label: Text(nearby ? 'QR 스캔하고 스탬프 받기' : '가게 앞에서만 QR 인증이 됩니다'),
           ),
           const SizedBox(height: 10),
+          if (visited)
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => WriteReviewScreen(store: store),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: const Text('포토 리뷰 쓰고 보너스 스탬프'),
+            ),
+          const SizedBox(height: 10),
           TextButton(
             onPressed: () {
               Clipboard.setData(ClipboardData(text: store.qrPayload));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('QR 값 복사됨: ${store.qrPayload}')),
-              );
+              showAppNotice(context, 'QR 값 복사됨: ${store.qrPayload}');
             },
             child: Text('시연 QR 값  ${store.qrPayload}'),
           ),
         ],
       ),
+    );
+      },
     );
   }
 }
@@ -221,11 +241,7 @@ class _ProductCard extends StatelessWidget {
                   productName: product.name,
                   price: product.discountPrice,
                 );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${product.name} 픽업 예약이 완료되었습니다.'),
-                  ),
-                );
+                showAppNotice(context, '${product.name} 픽업 예약이 완료되었습니다.');
               },
               child: const Text('픽업 예약하기'),
             ),

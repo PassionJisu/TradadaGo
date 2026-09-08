@@ -2,23 +2,43 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
+class StampFab extends StatelessWidget {
+  const StampFab({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton(
+      onPressed: onTap,
+      tooltip: '스탬프 찍기',
+      backgroundColor: AppColors.gold,
+      foregroundColor: AppColors.navy,
+      elevation: 10,
+      shape: const CircleBorder(),
+      child: const Icon(Icons.qr_code_scanner_rounded, size: 32),
+    );
+  }
+}
+
 class TradadaBottomNav extends StatelessWidget {
   const TradadaBottomNav({
     super.key,
     required this.index,
     required this.onSelect,
-    required this.onStamp,
   });
 
   final int index;
   final ValueChanged<int> onSelect;
-  final VoidCallback onStamp;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return BottomAppBar(
+      shape: const CircularNotchedRectangle(),
+      notchMargin: 7,
+      color: const Color(0xFFF8FBFF),
       elevation: 12,
-      color: Colors.white,
+      padding: EdgeInsets.zero,
       child: SafeArea(
         top: false,
         child: SizedBox(
@@ -27,51 +47,8 @@ class TradadaBottomNav extends StatelessWidget {
             children: [
               _item(Icons.home_rounded, '홈', 0),
               _item(Icons.shopping_bag_outlined, '예약내역', 1),
-              Expanded(
-                child: GestureDetector(
-                  onTap: onStamp,
-                  child: Column(
-                    children: [
-                      Transform.translate(
-                        offset: const Offset(0, -18),
-                        child: Container(
-                          width: 62,
-                          height: 62,
-                          decoration: BoxDecoration(
-                            color: AppColors.gold,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.goldDeep.withValues(alpha: 0.45),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                            border: Border.all(color: Colors.white, width: 4),
-                          ),
-                          child: const Icon(
-                            Icons.directions_walk_rounded,
-                            color: AppColors.navy,
-                            size: 28,
-                          ),
-                        ),
-                      ),
-                      Transform.translate(
-                        offset: const Offset(0, -10),
-                        child: const Text(
-                          '스탬프 찍기',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.navy,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              _item(Icons.notifications_none_rounded, '알림', 2),
+              const SizedBox(width: 76),
+              _item(Icons.rate_review_outlined, '리뷰 & 추천', 2),
               _item(Icons.person_outline_rounded, '마이페이지', 3),
             ],
           ),

@@ -7,6 +7,7 @@ import '../data/gwangju_markets.dart';
 import '../models/market.dart';
 import '../state/location_session.dart';
 import '../theme/app_colors.dart';
+import '../util/app_notice.dart';
 import '../widgets/market_play_view.dart';
 
 class HomeMapScreen extends StatefulWidget {
@@ -31,9 +32,7 @@ class HomeMapScreenState extends State<HomeMapScreen> {
 
   void openStampFlow() {
     if (_focused == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('시장 핀을 눌러 조감도로 들어가세요.')),
-      );
+      showAppNotice(context, '시장 핀을 눌러 조감도로 들어가세요.');
       return;
     }
     _playKey.currentState?.openNearbyStamp();
@@ -75,9 +74,7 @@ class HomeMapScreenState extends State<HomeMapScreen> {
 
   void _openMarket(Market market) {
     if (!market.isDemoReady) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${market.name}은 다음 단계에서 열립니다. 양동시장을 선택하세요.')),
-      );
+      showAppNotice(context, '${market.name}은 다음 단계에서 열립니다. 양동시장을 선택하세요.');
       return;
     }
     _loc.enterMarketPlay(

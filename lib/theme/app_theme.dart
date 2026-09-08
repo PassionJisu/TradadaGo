@@ -37,6 +37,12 @@ abstract final class AppTheme {
           ),
         ),
       ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: AppColors.gold,
+        foregroundColor: AppColors.navy,
+        shape: CircleBorder(),
+        elevation: 10,
+      ),
     );
   }
 }

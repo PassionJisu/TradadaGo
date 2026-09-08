@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -19,6 +21,8 @@ class _QrScanScreenState extends State<QrScanScreen> {
   final _controller = MobileScannerController(autoStart: false);
   bool _handled = false;
   String? _hint;
+
+  static const _lensSize = 236.0;
 
   @override
   void initState() {
@@ -66,16 +70,16 @@ class _QrScanScreenState extends State<QrScanScreen> {
       return;
     }
     _handled = true;
-    final added = AppSession.instance.addStamp(widget.store.id);
+    final grant = AppSession.instance.addVisitStamp(widget.store.id);
     if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(added ? '스탬프 획득!' : '이미 받은 스탬프'),
+        title: Text(grant.added ? '스탬프 획득!' : '오늘은 이미 찍었습니다'),
         content: Text(
-          added
-              ? '${widget.store.name} 스탬프가 체크판에 찍혔습니다.'
-              : '이 가게는 이미 스탬프를 받았습니다.',
+          grant.added
+              ? '${widget.store.name} 스탬프가 나의 체크판에 찍혔습니다.\n${grant.message}'
+              : grant.message,
         ),
         actions: [
           TextButton(
@@ -91,42 +95,44 @@ class _QrScanScreenState extends State<QrScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF141820),
       appBar: AppBar(
         title: Text('${widget.store.name} QR'),
-        backgroundColor: Colors.black,
+        backgroundColor: const Color(0xFF141820),
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                MobileScanner(
-                  controller: _controller,
-                  onDetect: _onDetect,
-                  errorBuilder: (context, error) => const Center(
-                    child: Text(
-                      '카메라를 열 수 없습니다.\n에뮬레이터는 시연 인증을 사용하세요.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [Color(0xFF2A3344), Color(0xFF101318)],
                 ),
-                IgnorePointer(
-                  child: Center(
-                    child: Container(
-                      width: 220,
-                      height: 220,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.gold, width: 4),
-                        borderRadius: BorderRadius.circular(24),
+              ),
+              child: Center(
+                child: _MagnifierLens(
+                  size: _lensSize,
+                  child: MobileScanner(
+                    controller: _controller,
+                    fit: BoxFit.cover,
+                    onDetect: _onDetect,
+                    errorBuilder: (context, error) => const ColoredBox(
+                      color: Color(0xFF1A1A1A),
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            '렌즈 안에 카메라가 열립니다',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
           Container(
@@ -143,14 +149,23 @@ class _QrScanScreenState extends State<QrScanScreen> {
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: AppColors.pinRed,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                Text(
-                  '가게 카운터 QR 또는 ${widget.store.qrPayload}',
+                const Text(
+                  '돋보기 렌즈 안으로 QR을 맞추세요. GPS 근접 + QR 이중 인증.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF6B7280)),
+                  style: TextStyle(color: Color(0xFF6B7280)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '시연 QR  ${widget.store.qrPayload}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
@@ -158,6 +173,150 @@ class _QrScanScreenState extends State<QrScanScreen> {
                   child: const Text('에뮬레이터 시연 인증'),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MagnifierLens extends StatelessWidget {
+  const _MagnifierLens({required this.size, required this.child});
+
+  final double size;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final frame = size + 36;
+    return SizedBox(
+      width: frame + 70,
+      height: frame + 70,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            right: 8,
+            bottom: 10,
+            child: Transform.rotate(
+              angle: math.pi / 4.4,
+              child: Container(
+                width: 30,
+                height: 128,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFFFFE48A),
+                      AppColors.goldDeep,
+                      Color(0xFFB8860B),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      offset: const Offset(4, 8),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: frame,
+            height: frame,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFFFF6C8),
+                  AppColors.gold,
+                  AppColors.goldDeep,
+                  Color(0xFFB8860B),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.gold.withValues(alpha: 0.4),
+                  blurRadius: 28,
+                  spreadRadius: 2,
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: Container(
+              width: size + 8,
+              height: size + 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.7), width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                    spreadRadius: -2,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                clipBehavior: Clip.antiAliasWithSaveLayer,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ColoredBox(
+                      color: Colors.black,
+                      child: OverflowBox(
+                        maxWidth: size * 1.5,
+                        maxHeight: size * 1.5,
+                        child: SizedBox(
+                          width: size * 1.5,
+                          height: size * 1.5,
+                          child: child,
+                        ),
+                      ),
+                    ),
+                    IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            colors: [
+                              Colors.white.withValues(alpha: 0.12),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.32),
+                            ],
+                            stops: const [0.12, 0.58, 1],
+                          ),
+                        ),
+                      ),
+                    ),
+                    IgnorePointer(
+                      child: Align(
+                        alignment: const Alignment(-0.42, -0.52),
+                        child: Container(
+                          width: 96,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(40),
+                            color: Colors.white.withValues(alpha: 0.22),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

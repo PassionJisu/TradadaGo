@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../state/app_session.dart';
-import '../theme/app_colors.dart';
 import '../widgets/tradada_bottom_nav.dart';
 import 'home_map_screen.dart';
-import 'placeholder_screen.dart';
+import 'my_page_screen.dart';
 import 'reservations_screen.dart';
+import 'reviews_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -21,43 +20,47 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
+      floatingActionButtonLocation: _StayDockedFabLocation.center,
+      floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
+      floatingActionButton: StampFab(
+        onTap: () {
+          setState(() => _index = 0);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _mapKey.currentState?.openStampFlow();
+          });
+        },
+      ),
       body: IndexedStack(
         index: _index,
         children: [
           HomeMapScreen(key: _mapKey),
           const ReservationsScreen(),
-          const PlaceholderScreen(
-            title: '알림',
-            message: '알림은 2차에서 연결합니다.',
-            icon: Icons.notifications_none_rounded,
-          ),
-          ListenableBuilder(
-            listenable: AppSession.instance,
-            builder: (context, _) {
-              return PlaceholderScreen(
-                title: '마이페이지',
-                message: '스탬프 보드·미션은 다음 단계에서 붙입니다.',
-                icon: Icons.person_outline_rounded,
-                extra: Text(
-                  '스탬프 ${AppSession.instance.stampedStoreIds.length}개',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.navy,
-                  ),
-                ),
-              );
-            },
-          ),
+          const ReviewsScreen(),
+          const MyPageScreen(),
         ],
       ),
       bottomNavigationBar: TradadaBottomNav(
         index: _index,
         onSelect: (i) => setState(() => _index = i),
-        onStamp: () {
-          setState(() => _index = 0);
-          _mapKey.currentState?.openStampFlow();
-        },
       ),
     );
+  }
+}
+
+/// Keeps the yellow stamp button in the bottom-nav notch when a SnackBar appears.
+class _StayDockedFabLocation extends FloatingActionButtonLocation {
+  const _StayDockedFabLocation._();
+
+  static const _StayDockedFabLocation center = _StayDockedFabLocation._();
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    final double fabX = (scaffoldGeometry.scaffoldSize.width -
+            scaffoldGeometry.floatingActionButtonSize.width) /
+        2.0;
+    final double fabY = scaffoldGeometry.contentBottom -
+        scaffoldGeometry.floatingActionButtonSize.height / 2.0;
+    return Offset(fabX, fabY);
   }
 }

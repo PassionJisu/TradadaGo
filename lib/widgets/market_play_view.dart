@@ -9,6 +9,7 @@ import '../models/market.dart';
 import '../models/store.dart';
 import '../state/location_session.dart';
 import '../theme/app_colors.dart';
+import '../util/app_notice.dart';
 import 'store_preview_sheet.dart';
 
 class MarketPlayView extends StatefulWidget {
@@ -61,9 +62,7 @@ class MarketPlayViewState extends State<MarketPlayView>
   void openNearbyStamp() {
     final store = nearbyStore;
     if (store == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('가게 핀이 켜질 때까지 골목을 걸어주세요.')),
-      );
+      showAppNotice(context, '가게 핀이 켜질 때까지 골목을 걸어주세요.');
       return;
     }
     showStorePreviewSheet(context, store, nearby: true);
@@ -142,7 +141,7 @@ class MarketPlayViewState extends State<MarketPlayView>
                     ),
                   const Spacer(),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                     child: FilledButton.icon(
                       onPressed: _loc.demoWalking
                           ? _loc.stopDemoWalk
