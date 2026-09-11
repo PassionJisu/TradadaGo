@@ -7,6 +7,7 @@ import '../state/app_session.dart';
 import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 import '../util/money.dart';
+import '../widgets/completed_market_map.dart';
 import 'inquiry_screen.dart';
 import 'login_screen.dart';
 
@@ -32,11 +33,13 @@ class MyPageScreen extends StatelessWidget {
                     color: AppColors.navy,
                   ),
                 ),
-                const Text('스탬프 보드 · 칭호작 · 반복 미션'),
+                const Text('스탬프 보드 · 칭호작 · 완성 지도'),
                 const SizedBox(height: 14),
                 _MissionCard(session: s),
                 const SizedBox(height: 14),
                 _TitleCard(session: s),
+                const SizedBox(height: 14),
+                CompletedMarketMapCard(session: s),
                 const SizedBox(height: 14),
                 _StampBoard(session: s),
                 const SizedBox(height: 14),
@@ -148,7 +151,7 @@ class _DemoStampCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'QR 없이 방문 스탬프를 채워 보드·칭호를 확인합니다.',
+            'QR 없이 방문 스탬프를 채워 보드·칭호·완성 지도를 확인합니다.',
             style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
           const SizedBox(height: 12),

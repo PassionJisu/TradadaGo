@@ -218,8 +218,8 @@ class MarketPlayViewState extends State<MarketPlayView>
 
   Widget _avatarLayer(Offset worldPos) {
     return Positioned(
-      left: worldPos.dx - 42,
-      top: worldPos.dy - 100,
+      left: worldPos.dx - 36,
+      top: worldPos.dy - 122,
       child: IgnorePointer(
         child: AnimatedBuilder(
           animation: _pulse,
@@ -233,8 +233,9 @@ class MarketPlayViewState extends State<MarketPlayView>
             children: [
               Image.asset(
                 AppAssets.playAvatar,
-                width: 84,
-                height: 84,
+                width: 72,
+                height: 118,
+                fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
               ),
               Container(

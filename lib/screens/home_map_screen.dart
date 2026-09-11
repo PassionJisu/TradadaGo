@@ -8,6 +8,7 @@ import '../models/market.dart';
 import '../state/location_session.dart';
 import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
+import '../widgets/google_location_dot.dart';
 import '../widgets/market_play_view.dart';
 
 class HomeMapScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class HomeMapScreen extends StatefulWidget {
 class HomeMapScreenState extends State<HomeMapScreen> {
   Market? _focused;
   bool _mapReady = false;
+  NaverMapController? _map;
   final _playKey = GlobalKey<MarketPlayViewState>();
 
   LocationSession get _loc => LocationSession.instance;
@@ -27,7 +29,14 @@ class HomeMapScreenState extends State<HomeMapScreen> {
   @override
   void initState() {
     super.initState();
+    _loc.addListener(_syncMyLocation);
     _loc.startGps();
+  }
+
+  @override
+  void dispose() {
+    _loc.removeListener(_syncMyLocation);
+    super.dispose();
   }
 
   void openStampFlow() {
@@ -39,14 +48,60 @@ class HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   Future<void> _onMapReady(NaverMapController controller) async {
-    final overlay = controller.getLocationOverlay();
-    overlay.setIsVisible(false);
+    _map = controller;
     controller.setLocationTrackingMode(NLocationTrackingMode.none);
+    await _styleMyLocation(controller);
     _mapReady = true;
     await controller.addOverlayAll({
       for (final market in GwangjuMarkets.all) _marketMarker(market),
     });
+    _syncMyLocation();
     if (mounted) setState(() {});
+  }
+
+  Future<void> _styleMyLocation(NaverMapController controller) async {
+    if (!mounted) return;
+    final overlay = controller.getLocationOverlay();
+    final icon = await NOverlayImage.fromWidget(
+      widget: const GoogleLocationDot(),
+      size: const Size(64, 64),
+      context: context,
+    );
+    if (!mounted || _map != controller) return;
+    overlay.setIcon(icon);
+    overlay.setIconSize(const Size(22, 22));
+    overlay.setAnchor(NPoint.relativeCenter);
+    overlay.setSubIcon(null);
+    overlay.setCircleColor(const Color(0x331A73E8));
+    overlay.setCircleRadius(36);
+    overlay.setCircleOutlineColor(const Color(0x661A73E8));
+    overlay.setCircleOutlineWidth(1);
+  }
+
+  void _syncMyLocation() {
+    final controller = _map;
+    final here = _loc.current;
+    if (!_mapReady || controller == null) return;
+    final overlay = controller.getLocationOverlay();
+    if (here == null) {
+      overlay.setIsVisible(false);
+      return;
+    }
+    overlay.setPosition(here);
+    overlay.setIsVisible(true);
+  }
+
+  Future<void> _goToMyLocation() async {
+    final here = _loc.current;
+    final controller = _map;
+    if (here == null || controller == null) {
+      showAppNotice(context, '위치를 찾는 중입니다. 잠시 후 다시 눌러주세요.');
+      _loc.startGps();
+      return;
+    }
+    await controller.updateCamera(
+      NCameraUpdate.scrollAndZoomTo(target: here, zoom: 14.6),
+    );
   }
 
   NMarker _marketMarker(Market market) {
@@ -89,6 +144,7 @@ class HomeMapScreenState extends State<HomeMapScreen> {
 
   void _backToCity() {
     _loc.leaveMarketPlay();
+    _map = null;
     setState(() {
       _focused = null;
       _mapReady = false;
@@ -146,6 +202,22 @@ class HomeMapScreenState extends State<HomeMapScreen> {
                 child: _HintChip('광주 전통시장 핀만 표시됩니다. 양동시장을 눌러 입장하세요.'),
               ),
             ],
+          ),
+        ),
+        Positioned(
+          right: 16,
+          bottom: 108,
+          child: Material(
+            color: Colors.white,
+            elevation: 4,
+            shadowColor: const Color(0x330B3A6A),
+            shape: const CircleBorder(),
+            child: IconButton(
+              tooltip: '내 위치',
+              onPressed: _goToMyLocation,
+              color: GoogleLocationDot.blue,
+              icon: const Icon(Icons.my_location_rounded),
+            ),
           ),
         ),
       ],

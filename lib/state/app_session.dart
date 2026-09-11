@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../config/assets.dart';
 import '../config/env.dart';
 import '../data/gwangju_landmarks.dart';
+import '../data/gwangju_markets.dart';
 import '../models/collected_stamp.dart';
 import '../models/reservation.dart';
 import '../models/review.dart';
@@ -89,8 +90,12 @@ class AppSession extends ChangeNotifier {
 
   StampGrant addDemoVisitStamps(int count) {
     TitleTier? latest;
+    final marketIds = GwangjuMarkets.yangdong.stores.map((s) => s.id).toList();
     for (var i = 0; i < count; i++) {
-      final id = 'demo-store-${uniqueVisitCount + 1}';
+      final unused = marketIds.where((id) => !uniqueVisitStoreIds.contains(id));
+      final id = unused.isEmpty
+          ? 'demo-store-${uniqueVisitCount + 1}'
+          : unused.first;
       lastVisitStampAt[id] = DateTime.now();
       uniqueVisitStoreIds.add(id);
       _appendStamp(source: 'visit');

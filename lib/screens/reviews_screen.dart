@@ -17,44 +17,30 @@ class ReviewsScreen extends StatelessWidget {
       builder: (context, _) {
         final session = AppSession.instance;
         final ranking = session.weeklyRanking();
-        return ColoredBox(
-          color: AppColors.skyLight,
-          child: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-              children: [
-                const Text(
-                  '리뷰 & 추천',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.navy,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '오늘 추천 ${session.recommendsToday}/${AppSession.dailyRecommendLimit}회 · 보너스까지 ${session.recommendCountTowardBonus}/${AppSession.recommendsForBonus}',
-                  style: const TextStyle(
-                    color: AppColors.deepBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _Podium(ranking: ranking),
-                const SizedBox(height: 18),
-                const Text(
-                  '이번 주 포토 리뷰',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.navy,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ...session.reviews.map((r) => _ReviewCard(review: r)),
-              ],
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          children: [
+            Text(
+              '오늘 추천 ${session.recommendsToday}/${AppSession.dailyRecommendLimit}회 · 보너스까지 ${session.recommendCountTowardBonus}/${AppSession.recommendsForBonus}',
+              style: const TextStyle(
+                color: AppColors.deepBlue,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
+            const SizedBox(height: 14),
+            _Podium(ranking: ranking),
+            const SizedBox(height: 18),
+            const Text(
+              '이번 주 포토 리뷰',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...session.reviews.map((r) => _ReviewCard(review: r)),
+          ],
         );
       },
     );

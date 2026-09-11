@@ -29,6 +29,7 @@ class LocationSession extends ChangeNotifier {
 
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) {
+      current ??= GwangjuMarkets.cityCenter;
       status = '시장 핀을 눌러 들어가세요.';
       notifyListeners();
       return;
@@ -40,6 +41,7 @@ class LocationSession extends ChangeNotifier {
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
+      current ??= GwangjuMarkets.cityCenter;
       status = '시장 핀을 눌러 들어가세요.';
       notifyListeners();
       return;
@@ -59,7 +61,8 @@ class LocationSession extends ChangeNotifier {
       if (demoWalking) return;
       final next = NLatLng(pos.latitude, pos.longitude);
       if (!_looksLikeKorea(next)) {
-        status = '시장 핀을 눌러 조감도로 들어가세요.';
+        current ??= GwangjuMarkets.cityCenter;
+        status = '시연 위치 표시 중';
         notifyListeners();
         return;
       }

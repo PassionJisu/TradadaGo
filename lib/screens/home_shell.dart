@@ -4,7 +4,7 @@ import '../widgets/tradada_bottom_nav.dart';
 import 'home_map_screen.dart';
 import 'my_page_screen.dart';
 import 'reservations_screen.dart';
-import 'reviews_screen.dart';
+import 'community_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -36,7 +36,7 @@ class _HomeShellState extends State<HomeShell> {
         children: [
           HomeMapScreen(key: _mapKey),
           const ReservationsScreen(),
-          const ReviewsScreen(),
+          const CommunityScreen(),
           const MyPageScreen(),
         ],
       ),
