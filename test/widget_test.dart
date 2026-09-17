@@ -43,7 +43,28 @@ void main() {
     expect(find.text('양동 맛골목 반나절'), findsOneWidget);
   });
 
-  testWidgets('My page shows completed map and paints visited stores', (
+  testWidgets('Review tap lists store reviews and opens store detail', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const MaterialApp(home: CommunityScreen()));
+    await tester.tap(find.text('충장로막내').first);
+    await tester.pumpAndSettle();
+    expect(find.text('가게로 이동'), findsOneWidget);
+    expect(find.text('이 가게 리뷰 2개'), findsOneWidget);
+    expect(find.text('양동단골'), findsOneWidget);
+
+    await tester.tap(find.text('가게로 이동'));
+    await tester.pumpAndSettle();
+    expect(find.text('마감할인 상품'), findsOneWidget);
+    expect(find.text('홍어모둠 마감세트'), findsOneWidget);
+  });
+
+  testWidgets('My page lists markets then paints a visited store on the plan', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(400, 2400);
@@ -54,12 +75,20 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: MyPageScreen()));
     await tester.pump();
     expect(find.text('내가 완성한 지도'), findsOneWidget);
-    expect(find.textContaining('0/10곳 색칠'), findsOneWidget);
+
+    await tester.tap(find.text('내가 완성한 지도'));
+    await tester.pumpAndSettle();
+    expect(find.text('양동시장'), findsOneWidget);
+    expect(find.text('대인시장'), findsOneWidget);
+    expect(find.text('말바우시장'), findsOneWidget);
+
+    await tester.tap(find.text('양동시장'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('0/10곳 색칠'), findsWidgets);
 
     AppSession.instance.addVisitStamp('yd-honguh');
     await tester.pump();
-    expect(find.textContaining('1/10곳 색칠'), findsOneWidget);
-    expect(find.textContaining('평면도'), findsOneWidget);
+    expect(find.textContaining('1/10곳 색칠'), findsWidgets);
     expect(find.text('양동홍어타운'), findsWidgets);
   });
 }

@@ -4,8 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/review.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
-import '../util/app_notice.dart';
 import '../util/money.dart';
+import '../widgets/review_card.dart';
+import 'store_reviews_screen.dart';
 
 class ReviewsScreen extends StatelessWidget {
   const ReviewsScreen({super.key});
@@ -39,7 +40,15 @@ class ReviewsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            ...session.reviews.map((r) => _ReviewCard(review: r)),
+            ...session.reviews.map(
+              (r) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ReviewCard(
+                  review: r,
+                  onTap: () => openStoreReviews(context, r.storeId),
+                ),
+              ),
+            ),
           ],
         );
       },
@@ -80,9 +89,9 @@ class _Podium extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _podiumSlot(third, 3, 64, const Color(0xFFCD7F32), won(10000)),
-              _podiumSlot(first, 1, 92, AppColors.gold, won(30000)),
-              _podiumSlot(second, 2, 78, const Color(0xFFC0C0C0), won(20000)),
+              _podiumSlot(context, third, 3, 64, const Color(0xFFCD7F32), won(10000)),
+              _podiumSlot(context, first, 1, 92, AppColors.gold, won(30000)),
+              _podiumSlot(context, second, 2, 78, const Color(0xFFC0C0C0), won(20000)),
             ],
           ),
         ],
@@ -91,6 +100,7 @@ class _Podium extends StatelessWidget {
   }
 
   Widget _podiumSlot(
+    BuildContext context,
     Review? review,
     int place,
     double height,
@@ -98,131 +108,62 @@ class _Podium extends StatelessWidget {
     String prize,
   ) {
     return Expanded(
-      child: Column(
-        children: [
-          if (review != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset(
-                review.photoAsset,
-                height: 44,
-                width: 44,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              review.author,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: AppColors.navy,
-              ),
-            ),
-            Text(
-              '♥ ${review.likes}',
-              style: const TextStyle(fontSize: 11, color: AppColors.pinRed),
-            ),
-          ] else
-            const SizedBox(height: 48),
-          const SizedBox(height: 6),
-          Container(
-            height: height,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.85),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-            ),
-            child: Center(
-              child: Text(
-                '$place\n$prize',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.navy,
-                  height: 1.2,
-                  fontSize: 11,
+      child: GestureDetector(
+        onTap: review == null
+            ? null
+            : () => openStoreReviews(context, review.storeId),
+        child: Column(
+          children: [
+            if (review != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  review.photoAsset,
+                  height: 44,
+                  width: 44,
+                  fit: BoxFit.cover,
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewCard extends StatelessWidget {
-  const _ReviewCard({required this.review});
-
-  final Review review;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            review.author,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              color: AppColors.navy,
-            ),
-          ),
-          Text(
-            review.storeName,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.asset(
-              review.photoAsset,
-              height: 140,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(review.body, style: const TextStyle(height: 1.4)),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${review.likes}',
+              const SizedBox(height: 4),
+              Text(
+                review.author,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.navy,
+                ),
+              ),
+              Text(
+                '♥ ${review.likes}',
+                style: const TextStyle(fontSize: 11, color: AppColors.pinRed),
+              ),
+            ] else
+              const SizedBox(height: 48),
+            const SizedBox(height: 6),
+            Container(
+              height: height,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.85),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+              ),
+              child: Center(
+                child: Text(
+                  '$place\n$prize',
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                     color: AppColors.navy,
+                    height: 1.2,
+                    fontSize: 11,
                   ),
                 ),
-                const SizedBox(width: 6),
-                TextButton.icon(
-                  onPressed: () {
-                    final msg =
-                        AppSession.instance.recommendReview(review.id);
-                    if (msg != null && context.mounted) {
-                      showAppNotice(context, msg);
-                    }
-                  },
-                  icon: const Icon(Icons.thumb_up_alt_outlined, size: 18),
-                  label: const Text('추천'),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

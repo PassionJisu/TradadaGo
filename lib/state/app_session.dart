@@ -220,6 +220,10 @@ class AppSession extends ChangeNotifier {
     return copy.take(3).toList();
   }
 
+  List<Review> reviewsForStore(String storeId) {
+    return reviews.where((r) => r.storeId == storeId).toList();
+  }
+
   TitleTier? nextTitle() {
     for (final tier in TitleCatalog.all) {
       if (!earnedTitleIds.contains(tier.id)) return tier;
@@ -331,6 +335,16 @@ List<Review> _seedReviews() {
       photoAsset: AppAssets.landmark518,
       createdAt: DateTime.now().subtract(const Duration(days: 2)),
       likes: 9,
+    ),
+    Review(
+      id: 'r6',
+      author: '양동단골',
+      storeId: 'yd-honguh',
+      storeName: '양동홍어타운',
+      body: '두 번째 방문도 만족스러워요. 마감 세트가 늘 알찹니다.',
+      photoAsset: AppAssets.yangdongPlayMap,
+      createdAt: DateTime.now().subtract(const Duration(days: 3)),
+      likes: 6,
     ),
   ];
 }

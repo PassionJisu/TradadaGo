@@ -236,6 +236,15 @@ abstract final class GwangjuMarkets {
 
   static Market byId(String id) => all.firstWhere((m) => m.id == id);
 
+  static Store? storeById(String id) {
+    for (final market in all) {
+      for (final store in market.stores) {
+        if (store.id == id) return store;
+      }
+    }
+    return null;
+  }
+
   /// 에뮬레이터 시연용 양동시장 골목 경로.
   static const yangdongDemoPath = <NLatLng>[
     NLatLng(35.15220, 126.90430),

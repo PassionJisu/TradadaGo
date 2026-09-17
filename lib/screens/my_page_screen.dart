@@ -7,7 +7,7 @@ import '../state/app_session.dart';
 import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 import '../util/money.dart';
-import '../widgets/completed_market_map.dart';
+import 'completed_maps_screen.dart';
 import 'inquiry_screen.dart';
 import 'login_screen.dart';
 
@@ -39,7 +39,7 @@ class MyPageScreen extends StatelessWidget {
                 const SizedBox(height: 14),
                 _TitleCard(session: s),
                 const SizedBox(height: 14),
-                CompletedMarketMapCard(session: s),
+                const CompletedMarketMapCard(),
                 const SizedBox(height: 14),
                 _StampBoard(session: s),
                 const SizedBox(height: 14),
