@@ -1,12 +1,24 @@
 abstract final class AppAssets {
   static const logo = 'assets/images/tradada_logo.png';
+  static const emblem = 'assets/images/tradada_emblem.png';
   static const avatar = 'assets/images/map_avatar.png';
   static const playAvatar = 'assets/images/play_avatar.png';
   static const skyHeader = 'assets/images/sky_header.png';
   static const pinMarket = 'assets/images/pin_market.png';
   static const pinStoreIdle = 'assets/images/pin_store_idle.png';
   static const pinStoreActive = 'assets/images/pin_store_active.png';
-  static const yangdongPlayMap = 'assets/images/yangdong_play_map.png';
+  static const yangdongDriedPlan = 'assets/images/yangdong_dried_plan.png';
+  static const yangdongPlayMap = yangdongDriedPlan;
+  static const yangdongFloor1 = 'assets/images/yangdong_floor_1.png';
+  static const yangdongFloor2 = 'assets/images/yangdong_floor_2.png';
+  static const yangdongFloorB1 = 'assets/images/yangdong_floor_b1.png';
+  static const foodGimbap = 'assets/images/food_gimbap.png';
+  static const foodChicken = 'assets/images/food_chicken.png';
+  static const foodTteokbokki = 'assets/images/food_tteokbokki.png';
+  static const foodGukbap = 'assets/images/food_gukbap.png';
+  static const foodJeon = 'assets/images/food_jeon.png';
+  static const foodFruit = 'assets/images/food_fruit.png';
+  static const foodSeafood = 'assets/images/food_seafood.png';
   static const landmarkMudeung = 'assets/images/landmark_mudeung.png';
   static const landmarkAcc = 'assets/images/landmark_acc.png';
   static const landmark518 = 'assets/images/landmark_518.png';

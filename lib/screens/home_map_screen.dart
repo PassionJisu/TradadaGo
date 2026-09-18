@@ -240,7 +240,7 @@ class _CityHeader extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
           child: Row(
             children: [
-              Image.asset(AppAssets.logo, width: 48, height: 48),
+              Image.asset(AppAssets.emblem, width: 48, height: 48),
               const SizedBox(width: 6),
               Expanded(
                 child: Column(

@@ -20,9 +20,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   String? _photo;
 
   static const _demoPhotos = [
-    AppAssets.yangdongPlayMap,
-    AppAssets.skyHeader,
-    AppAssets.landmarkChungjang,
+    AppAssets.foodGimbap,
+    AppAssets.foodChicken,
+    AppAssets.foodTteokbokki,
   ];
 
   @override

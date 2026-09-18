@@ -163,7 +163,7 @@ class LocationSession extends ChangeNotifier {
     );
   }
 
-  bool isNear(NLatLng target, {double meters = 38}) {
+  bool isNear(NLatLng target, {double meters = 28}) {
     final d = metersTo(target);
     return d != null && d <= meters;
   }

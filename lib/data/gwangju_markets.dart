@@ -1,5 +1,6 @@
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 
+import '../config/assets.dart';
 import '../models/market.dart';
 import '../models/product.dart';
 import '../models/store.dart';
@@ -23,14 +24,14 @@ abstract final class GwangjuMarkets {
       northEast: NLatLng(35.15540, 126.90740),
     ),
     isDemoReady: true,
-    illustrationAsset: 'assets/images/yangdong_play_map.png',
+    illustrationAsset: AppAssets.yangdongFloor1,
     stores: const [
       Store(
         id: 'yd-honguh',
         marketId: 'yangdong',
         name: '양동홍어타운',
         category: '수산',
-        position: NLatLng(35.15255, 126.90455),
+        position: NLatLng(35.15455, 126.90385),
         description: '홍어회·홍어찜 마감 세트. 오늘 남은 회만 할인 판매합니다.',
         products: [
           Product(
@@ -48,7 +49,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '천변국밥',
         category: '식당',
-        position: NLatLng(35.15295, 126.90480),
+        position: NLatLng(35.15345, 126.90585),
         description: '점심 남은 국밥을 저녁 픽업 가격으로 내놓습니다.',
         products: [
           Product(
@@ -66,7 +67,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '양동김밥명가',
         category: '분식',
-        position: NLatLng(35.15335, 126.90495),
+        position: NLatLng(35.15370, 126.90655),
         description: '당일 생산 김밥·떡볶이 남은 수량 할인.',
         products: [
           Product(
@@ -84,7 +85,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '빛고을육회',
         category: '정육·식당',
-        position: NLatLng(35.15370, 126.90510),
+        position: NLatLng(35.15390, 126.90390),
         description: '당일 손질 육회 남은 분을 마감 할인합니다.',
         products: [
           Product(
@@ -102,7 +103,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '햇살과일',
         category: '과일',
-        position: NLatLng(35.15405, 126.90535),
+        position: NLatLng(35.15455, 126.90620),
         description: '오늘 팔다 남은 제철 과일 모음.',
         products: [
           Product(
@@ -120,7 +121,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '싱싱수산',
         category: '수산',
-        position: NLatLng(35.15435, 126.90570),
+        position: NLatLng(35.15455, 126.90450),
         description: '저녁 전에 소진할 생선 구이 세트.',
         products: [
           Product(
@@ -138,7 +139,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '양동떡집',
         category: '떡·한과',
-        position: NLatLng(35.15420, 126.90620),
+        position: NLatLng(35.15290, 126.90395),
         description: '아침 생산분 중 남은 떡 모둠.',
         products: [
           Product(
@@ -156,7 +157,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '고운한복',
         category: '생활잡화',
-        position: NLatLng(35.15375, 126.90645),
+        position: NLatLng(35.15390, 126.90690),
         description: '시장 체험용 소품. 스탬프 시연 점포입니다.',
         products: [
           Product(
@@ -174,7 +175,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '할머니전집',
         category: '식당',
-        position: NLatLng(35.15325, 126.90600),
+        position: NLatLng(35.15395, 126.90615),
         description: '저녁 전에 남은 전 모둠을 포장 할인.',
         products: [
           Product(
@@ -192,7 +193,7 @@ abstract final class GwangjuMarkets {
         marketId: 'yangdong',
         name: '밤마실군밤',
         category: '길거리 간식',
-        position: NLatLng(35.15285, 126.90540),
+        position: NLatLng(35.15250, 126.90615),
         description: '구운 밤·고구마 남은 분량.',
         products: [
           Product(
@@ -245,19 +246,21 @@ abstract final class GwangjuMarkets {
     return null;
   }
 
-  /// 에뮬레이터 시연용 양동시장 골목 경로.
+  /// 조감도 걷기 노선과 같은 순서. 정문에서 구역을 한 바퀴 돈 뒤 돌아온다.
   static const yangdongDemoPath = <NLatLng>[
-    NLatLng(35.15220, 126.90430),
-    NLatLng(35.15255, 126.90455),
-    NLatLng(35.15295, 126.90480),
-    NLatLng(35.15335, 126.90495),
-    NLatLng(35.15370, 126.90510),
-    NLatLng(35.15405, 126.90535),
-    NLatLng(35.15435, 126.90570),
-    NLatLng(35.15420, 126.90620),
-    NLatLng(35.15375, 126.90645),
-    NLatLng(35.15325, 126.90600),
-    NLatLng(35.15285, 126.90540),
-    NLatLng(35.15255, 126.90490),
+    NLatLng(35.15215, 126.90500),
+    NLatLng(35.15235, 126.90500),
+    NLatLng(35.15250, 126.90615),
+    NLatLng(35.15270, 126.90500),
+    NLatLng(35.15290, 126.90395),
+    NLatLng(35.15320, 126.90500),
+    NLatLng(35.15345, 126.90585),
+    NLatLng(35.15370, 126.90655),
+    NLatLng(35.15395, 126.90615),
+    NLatLng(35.15390, 126.90390),
+    NLatLng(35.15455, 126.90385),
+    NLatLng(35.15455, 126.90450),
+    NLatLng(35.15455, 126.90620),
+    NLatLng(35.15215, 126.90500),
   ];
 }

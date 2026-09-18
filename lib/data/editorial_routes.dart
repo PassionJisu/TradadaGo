@@ -9,7 +9,7 @@ abstract final class EditorialRoutes {
       kicker: '시장 미식',
       duration: '약 90분',
       distance: '800m',
-      coverAsset: AppAssets.yangdongPlayMap,
+      coverAsset: AppAssets.foodGimbap,
       summary:
           '광주의 부엌 양동시장을 홍어부터 군밤까지 한 바퀴. 마감할인 픽업 창구를 따라가면 걸음마다 스탬프가 쌓입니다.',
       stops: [
