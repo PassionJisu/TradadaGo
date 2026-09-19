@@ -24,6 +24,7 @@ class SangjuIndoorPainter extends CustomPainter {
     this.showDiscountPins = true,
     this.pinIdle,
     this.pinActive,
+    this.rotation = 0,
   });
 
   final List<IndoorStall> stalls;
@@ -39,6 +40,7 @@ class SangjuIndoorPainter extends CustomPainter {
   final bool showDiscountPins;
   final ui.Image? pinIdle;
   final ui.Image? pinActive;
+  final double rotation;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -111,13 +113,9 @@ class SangjuIndoorPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    gate.paint(
-      canvas,
-      Offset(
-        pad + mapSize.width / 2 - gate.width / 2,
-        pad + mapSize.height - 36,
-      ),
-    );
+    _drawUpright(canvas, Offset(pad + mapSize.width / 2, pad + mapSize.height - 24), () {
+      gate.paint(canvas, Offset(-gate.width / 2, -gate.height / 2));
+    });
     _drawDiscountPins(canvas);
     canvas.restore();
   }
@@ -222,10 +220,20 @@ class SangjuIndoorPainter extends CustomPainter {
       maxLines: 2,
       ellipsis: '…',
     )..layout(maxWidth: stall.bounds.width - 6);
-    painter.paint(
-      canvas,
-      stall.bounds.center.translate(-painter.width / 2, -painter.height / 2),
-    );
+    _drawUpright(canvas, stall.bounds.center, () {
+      painter.paint(
+        canvas,
+        Offset(-painter.width / 2, -painter.height / 2),
+      );
+    });
+  }
+
+  void _drawUpright(Canvas canvas, Offset worldAnchor, VoidCallback paint) {
+    canvas.save();
+    canvas.translate(worldAnchor.dx, worldAnchor.dy);
+    canvas.rotate(-rotation);
+    paint();
+    canvas.restore();
   }
 
   static List<IndoorStall> pickDiscountPins(
@@ -280,21 +288,19 @@ class SangjuIndoorPainter extends CustomPainter {
       final aspect = image == null ? 0.72 : image.width / image.height;
       final pinW = pinH * aspect;
       final center = stall.bounds.center;
-      final dst = Rect.fromCenter(
-        center: Offset(center.dx, center.dy - pinH * 0.38),
-        width: pinW,
-        height: pinH,
-      );
-      if (image != null) {
-        canvas.drawImageRect(
-          image,
-          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-          dst,
-          Paint()..filterQuality = FilterQuality.high,
-        );
-      } else {
-        _drawFallbackPin(canvas, dst, highlight);
-      }
+      _drawUpright(canvas, center, () {
+        final dst = Rect.fromLTWH(-pinW / 2, -pinH, pinW, pinH);
+        if (image != null) {
+          canvas.drawImageRect(
+            image,
+            Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+            dst,
+            Paint()..filterQuality = FilterQuality.high,
+          );
+        } else {
+          _drawFallbackPin(canvas, dst, highlight);
+        }
+      });
     }
   }
 
@@ -332,6 +338,7 @@ class SangjuIndoorPainter extends CustomPainter {
         oldDelegate.clipToMarket != clipToMarket ||
         oldDelegate.showDiscountPins != showDiscountPins ||
         oldDelegate.pinIdle != pinIdle ||
-        oldDelegate.pinActive != pinActive;
+        oldDelegate.pinActive != pinActive ||
+        oldDelegate.rotation != rotation;
   }
 }

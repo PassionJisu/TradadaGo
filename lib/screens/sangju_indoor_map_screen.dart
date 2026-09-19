@@ -253,6 +253,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                               ),
                               pinIdle: StorePinImages.idle,
                               pinActive: StorePinImages.active,
+                              rotation: camera.rotation,
                             ),
                           ),
                         ),
