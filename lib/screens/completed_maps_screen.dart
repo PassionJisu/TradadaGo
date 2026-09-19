@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/gwangju_markets.dart';
+import '../data/sangju_indoor_map.dart';
 import '../models/market.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
@@ -44,10 +45,13 @@ class _MarketRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = market.stores.length;
-    final painted =
-        market.stores.where((s) => session.hasPainted(s.id)).length;
-    final ready = total > 0;
+    final isDemo = market.id == GwangjuMarkets.malbau.id;
+    final total =
+        isDemo ? SangjuIndoorMap.publishedStallCount : market.stores.length;
+    final painted = isDemo
+        ? session.qrVerifiedStoreIds.where((id) => id.startsWith('sj-')).length
+        : market.stores.where((s) => session.hasPainted(s.id)).length;
+    final ready = isDemo || total > 0;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),

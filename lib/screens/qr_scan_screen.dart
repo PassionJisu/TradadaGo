@@ -7,7 +7,6 @@ import '../models/store.dart';
 import '../state/app_session.dart';
 import '../state/location_session.dart';
 import '../theme/app_colors.dart';
-import 'write_review_screen.dart';
 
 class QrScanScreen extends StatefulWidget {
   const QrScanScreen({super.key, required this.store});
@@ -78,22 +77,18 @@ class _QrScanScreenState extends State<QrScanScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('QR 인증 성공'),
         content: Text(
-          '${widget.store.name} 앞에서 인증되었습니다.\n사진을 포함한 리뷰를 남기면 방문 완료 · 스탬프 · 지도 색칠이 반영됩니다.',
+          '${widget.store.name} 앞에서 인증되었습니다.\n리뷰는 예약내역에서 작성할 수 있습니다.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('리뷰 작성하기'),
+            child: const Text('확인'),
           ),
         ],
       ),
     );
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => WriteReviewScreen(store: widget.store),
-      ),
-    );
+    Navigator.of(context).pop();
   }
 
   @override

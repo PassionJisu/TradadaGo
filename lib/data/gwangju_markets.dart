@@ -487,13 +487,14 @@ abstract final class GwangjuMarkets {
 
   static final malbau = Market(
     id: 'malbau',
-    name: '말바우시장',
-    subtitle: '1차 데모 준비 중',
+    name: '시장 데모',
+    subtitle: '내부 지도 시연',
     center: const NLatLng(35.18040, 126.91120),
     bounds: const NLatLngBounds(
       southWest: NLatLng(35.17900, 126.90960),
       northEast: NLatLng(35.18180, 126.91280),
     ),
+    isDemoReady: true,
     stores: const [],
   );
 

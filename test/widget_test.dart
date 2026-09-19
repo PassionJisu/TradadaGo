@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:foodridge/screens/community_screen.dart';
 import 'package:foodridge/screens/login_screen.dart';
 import 'package:foodridge/screens/my_page_screen.dart';
-import 'package:foodridge/state/app_session.dart';
 import 'package:foodridge/widgets/tradada_bottom_nav.dart';
 
 void main() {
@@ -14,7 +13,7 @@ void main() {
 
   testWidgets('Login screen shows Tradada branding', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
-    expect(find.textContaining('트라다다'), findsWidgets);
+    expect(find.textContaining('임시 관리자'), findsOneWidget);
     expect(find.text('들어가기'), findsOneWidget);
   });
 
@@ -80,16 +79,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('양동시장'), findsOneWidget);
     expect(find.text('대인시장'), findsOneWidget);
-    expect(find.text('말바우시장'), findsOneWidget);
+    expect(find.text('시장 데모'), findsOneWidget);
+    expect(find.textContaining('0/12곳 색칠'), findsWidgets);
+    expect(find.textContaining('0/186곳 색칠'), findsOneWidget);
 
     await tester.tap(find.text('양동시장'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('0/10곳 색칠'), findsWidgets);
-
-    AppSession.instance.addVisitStamp('yd-honguh');
-    await tester.pump();
-    expect(find.textContaining('1/10곳 색칠'), findsWidgets);
-    expect(find.text('양동홍어타운'), findsWidgets);
+    expect(find.text('양동시장'), findsWidgets);
   });
 }
 

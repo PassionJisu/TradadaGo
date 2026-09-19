@@ -120,7 +120,7 @@ class StoreDetailScreen extends StatelessWidget {
                   }
                 : null,
             icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: Text(nearby ? 'QR 인증하고 리뷰 쓰기' : '가게 앞에서만 QR 인증이 됩니다'),
+            label: Text(nearby ? 'QR 인증하기' : '가게 앞에서만 QR 인증이 됩니다'),
           ),
           const SizedBox(height: 10),
           if (canReview)

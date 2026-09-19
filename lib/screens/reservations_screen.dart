@@ -47,9 +47,11 @@ class ReservationsScreen extends StatelessWidget {
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, i) {
                       final r = items[i];
-                      final store = GwangjuMarkets.yangdong.stores
-                          .where((s) => s.id == r.storeId)
-                          .firstOrNull;
+                      final store = GwangjuMarkets.storeById(r.storeId);
+                      final canReview = store != null &&
+                          AppSession.instance.canWriteReview(store.id);
+                      final reviewed = store != null &&
+                          AppSession.instance.hasPainted(store.id);
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -76,11 +78,11 @@ class ReservationsScreen extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            if (store != null &&
-                                AppSession.instance.hasEverVisited(store.id))
+                            const SizedBox(height: 8),
+                            if (canReview)
                               Align(
                                 alignment: Alignment.centerRight,
-                                child: TextButton(
+                                child: FilledButton.tonalIcon(
                                   onPressed: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
@@ -89,7 +91,19 @@ class ReservationsScreen extends StatelessWidget {
                                       ),
                                     );
                                   },
-                                  child: const Text('포토 리뷰 쓰기'),
+                                  icon: const Icon(Icons.photo_camera_outlined),
+                                  label: Text(
+                                    reviewed ? '포토 리뷰 더 남기기' : '포토 리뷰 쓰기',
+                                  ),
+                                ),
+                              )
+                            else
+                              const Text(
+                                '가게 앞에서 QR 인증하면 여기서 리뷰를 작성할 수 있습니다.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF6B7280),
                                 ),
                               ),
                           ],

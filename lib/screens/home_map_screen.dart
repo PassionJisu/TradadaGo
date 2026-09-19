@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 import '../widgets/google_location_dot.dart';
 import '../widgets/market_play_view.dart';
+import 'sangju_indoor_map_screen.dart';
 
 class HomeMapScreen extends StatefulWidget {
   const HomeMapScreen({super.key});
@@ -128,8 +129,12 @@ class HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   void _openMarket(Market market) {
+    if (market.id == GwangjuMarkets.malbau.id) {
+      setState(() => _focused = market);
+      return;
+    }
     if (!market.isDemoReady) {
-      showAppNotice(context, '${market.name}은 다음 단계에서 열립니다. 양동시장을 선택하세요.');
+      showAppNotice(context, '${market.name}은 다음 단계에서 열립니다. 양동시장 또는 시장 데모를 선택하세요.');
       return;
     }
     _loc.enterMarketPlay(
@@ -157,7 +162,14 @@ class HomeMapScreenState extends State<HomeMapScreen> {
       duration: const Duration(milliseconds: 420),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
-      child: _focused == null ? _cityMap() : _playMap(),
+      child: _focused == null
+          ? _cityMap()
+          : _focused!.id == GwangjuMarkets.malbau.id
+              ? SangjuIndoorMapScreen(
+                  key: const ValueKey('indoor-demo'),
+                  onBack: _backToCity,
+                )
+              : _playMap(),
     );
   }
 
@@ -199,7 +211,7 @@ class HomeMapScreenState extends State<HomeMapScreen> {
                 ),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
-                child: _HintChip('광주 전통시장 핀만 표시됩니다. 양동시장을 눌러 입장하세요.'),
+                child: _HintChip('광주 전통시장 핀만 표시됩니다. 양동시장 또는 시장 데모를 눌러 입장하세요.'),
               ),
             ],
           ),
