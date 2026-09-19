@@ -7,9 +7,10 @@ import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 
 class WriteReviewScreen extends StatefulWidget {
-  const WriteReviewScreen({super.key, required this.store});
+  const WriteReviewScreen({super.key, required this.store, this.visitId});
 
   final Store store;
+  final String? visitId;
 
   @override
   State<WriteReviewScreen> createState() => _WriteReviewScreenState();
@@ -54,6 +55,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       store: widget.store,
       body: _body.text.trim(),
       photoAsset: _photo!,
+      visitId: widget.visitId,
     );
     await showAppNotice(context, grant.message);
     if (mounted) Navigator.pop(context);

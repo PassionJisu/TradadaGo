@@ -10,6 +10,7 @@ import '../data/sangju_indoor_map.dart';
 import '../map/indoor_camera.dart';
 import '../map/market_blueprint.dart';
 import '../map/sangju_indoor_painter.dart';
+import '../map/store_pin_images.dart';
 import '../models/indoor_stall.dart';
 import 'qr_scan_screen.dart';
 import 'store_detail_screen.dart';
@@ -73,6 +74,8 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
         focus: data.startFocus,
       );
     });
+    await StorePinImages.ensureLoaded();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -97,11 +100,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     final camera = _camera;
     final data = _data;
     if (camera == null || data == null) return;
-    final hit = camera.hit(camera.focus, data.stalls);
-    if (hit != null && hit.floor != _floor) {
-      _nearby = null;
-      return;
-    }
+    final hit = camera.hit(camera.focus, data.stallsOnFloor(_floor));
     if (hit != null && _filterUse != null && hit.use != _filterUse) {
       _nearby = null;
       return;
@@ -133,9 +132,8 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     final data = _data;
     if (camera == null || data == null) return;
     final world = camera.screenToWorld(details.localPosition, viewport);
-    final stall = camera.hit(world, data.stalls);
+    final stall = camera.hit(world, data.stallsOnFloor(_floor));
     if (stall == null) return;
-    if (stall.floor != _floor) return;
     if (_filterUse != null && stall.use != _filterUse) return;
     _showStall(stall);
   }
@@ -251,8 +249,10 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                               floorFilter: _floor,
                               useFilter: _filterUse,
                               visitedIds: Set<String>.of(
-                                AppSession.instance.qrVerifiedStoreIds,
+                                AppSession.instance.paintedStoreIds,
                               ),
+                              pinIdle: StorePinImages.idle,
+                              pinActive: StorePinImages.active,
                             ),
                           ),
                         ),
@@ -628,7 +628,7 @@ class IndoorStallSheet extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             verified
-                ? '이미 QR 인증한 점포입니다. 다시 찍거나 이용내역에서 리뷰를 남길 수 있습니다.'
+                ? '이미 QR 인증한 점포입니다. 다시 찍으면 이용내역에 방문이 추가되고, 방문당 리뷰는 1회입니다.'
                 : '지도 핀이 없는 내부 점포도 QR 인증과 마감할인 예약이 됩니다.',
             style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
           ),

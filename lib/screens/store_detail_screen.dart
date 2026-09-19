@@ -131,12 +131,15 @@ class StoreDetailScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => WriteReviewScreen(store: store),
+                    builder: (_) => WriteReviewScreen(
+                      store: store,
+                      visitId: AppSession.instance.unreviewedQrVisit(store.id)?.id,
+                    ),
                   ),
                 );
               },
               icon: const Icon(Icons.photo_camera_outlined),
-              label: Text(painted ? '포토 리뷰 더 남기기' : '포토 리뷰 쓰고 방문 완료하기'),
+              label: const Text('포토 리뷰 쓰기'),
             ),
           if (storeReviews.isNotEmpty) ...[
             const SizedBox(height: 18),

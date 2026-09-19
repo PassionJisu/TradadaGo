@@ -94,26 +94,34 @@ class AppSession extends ChangeNotifier {
 
   bool hasQrVerified(String storeId) => qrVerifiedStoreIds.contains(storeId);
 
-  bool canWriteReview(String storeId) =>
-      hasQrVerified(storeId) || hasPainted(storeId);
+  bool canWriteReview(String storeId) => unreviewedQrVisit(storeId) != null;
+
+  Reservation? unreviewedQrVisit(String storeId) {
+    for (final item in reservations) {
+      if (item.storeId == storeId && item.isQrVisit && !item.hasReview) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  bool canWriteReviewFor(Reservation item) =>
+      item.isQrVisit && !item.hasReview;
 
   void markQrVerified(Store store) {
     qrVerifiedStoreIds.add(store.id);
-    final alreadyListed = reservations.any((item) => item.storeId == store.id);
-    if (!alreadyListed) {
-      reservations.insert(
-        0,
-        Reservation(
-          id: 'qr-${DateTime.now().microsecondsSinceEpoch}',
-          storeId: store.id,
-          storeName: store.name,
-          productName: '현장 방문',
-          price: 0,
-          createdAt: DateTime.now(),
-          kind: UsageKind.qrVisit,
-        ),
-      );
-    }
+    reservations.insert(
+      0,
+      Reservation(
+        id: 'qr-${DateTime.now().microsecondsSinceEpoch}',
+        storeId: store.id,
+        storeName: store.name,
+        productName: '현장 방문',
+        price: 0,
+        createdAt: DateTime.now(),
+        kind: UsageKind.qrVisit,
+      ),
+    );
     notifyListeners();
   }
 
@@ -231,20 +239,37 @@ class AppSession extends ChangeNotifier {
     required Store store,
     required String body,
     required String photoAsset,
+    String? visitId,
   }) {
-    reviews.insert(
-      0,
-      Review(
-        id: 'mine-${DateTime.now().microsecondsSinceEpoch}',
-        author: displayName,
-        storeId: store.id,
-        storeName: store.name,
-        body: body,
-        photoAsset: photoAsset,
-        createdAt: DateTime.now(),
-        isMine: true,
-      ),
+    Reservation? visit;
+    if (visitId != null) {
+      for (final item in reservations) {
+        if (item.id == visitId) {
+          visit = item;
+          break;
+        }
+      }
+    }
+    visit ??= unreviewedQrVisit(store.id);
+    if (visit == null || visit.hasReview) {
+      return const StampGrant(
+        added: false,
+        message: '이 방문은 이미 리뷰를 남겼습니다. QR을 다시 인증하면 새 방문으로 작성할 수 있습니다.',
+      );
+    }
+
+    final review = Review(
+      id: 'mine-${DateTime.now().microsecondsSinceEpoch}',
+      author: displayName,
+      storeId: store.id,
+      storeName: store.name,
+      body: body,
+      photoAsset: photoAsset,
+      createdAt: DateTime.now(),
+      isMine: true,
     );
+    reviews.insert(0, review);
+    visit.reviewId = review.id;
     qrVerifiedStoreIds.add(store.id);
     StampGrant grant;
     if (!hasEverVisited(store.id) || !hasVisitStampToday(store.id)) {
@@ -276,6 +301,14 @@ class AppSession extends ChangeNotifier {
 
   List<Review> reviewsForStore(String storeId) {
     return reviews.where((r) => r.storeId == storeId).toList();
+  }
+
+  Review? reviewById(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final review in reviews) {
+      if (review.id == id) return review;
+    }
+    return null;
   }
 
   TitleTier? nextTitle() {

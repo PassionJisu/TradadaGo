@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:foodridge/config/assets.dart';
 import 'package:foodridge/data/gwangju_markets.dart';
 import 'package:foodridge/screens/community_screen.dart';
 import 'package:foodridge/screens/login_screen.dart';
 import 'package:foodridge/screens/my_page_screen.dart';
 import 'package:foodridge/screens/reservations_screen.dart';
+import 'package:foodridge/data/sangju_indoor_map.dart';
 import 'package:foodridge/state/app_session.dart';
 import 'package:foodridge/widgets/tradada_bottom_nav.dart';
 
@@ -86,7 +88,7 @@ void main() {
     expect(find.text('대인시장'), findsOneWidget);
     expect(find.text('시장 데모'), findsOneWidget);
     expect(find.textContaining('0/12곳 색칠'), findsWidgets);
-    expect(find.textContaining('0/186곳 색칠'), findsOneWidget);
+    expect(find.textContaining('0/${SangjuIndoorMap.publishedStallCount}곳 색칠'), findsOneWidget);
 
     await tester.tap(find.text('양동시장'));
     await tester.pumpAndSettle();
@@ -96,13 +98,37 @@ void main() {
   testWidgets('QR visit appears in usage history with review', (tester) async {
     final store = GwangjuMarkets.yangdong.stores.first;
     AppSession.instance.markQrVerified(store);
+    AppSession.instance.markQrVerified(store);
 
     await tester.pumpWidget(const MaterialApp(home: ReservationsScreen()));
     expect(find.text('이용내역'), findsOneWidget);
-    expect(find.text(store.name), findsOneWidget);
-    expect(find.text('QR 방문 인증'), findsWidgets);
-    expect(find.text('포토 리뷰 쓰기'), findsOneWidget);
+    expect(find.text(store.name), findsNWidgets(2));
+    expect(find.text('QR 방문 인증'), findsNWidgets(2));
+    expect(find.text('포토 리뷰 쓰기'), findsNWidgets(2));
+    expect(find.text('포토 리뷰 더 남기기'), findsNothing);
+    expect(find.textContaining(AppSession.instance.reservations.first.timeLabel), findsWidgets);
     expect(find.textContaining('아직 이용 내역이 없습니다'), findsNothing);
+  });
+
+  testWidgets('usage history opens a written review', (tester) async {
+    final store = GwangjuMarkets.yangdong.stores.first;
+    AppSession.instance.markQrVerified(store);
+    final visit = AppSession.instance.unreviewedQrVisit(store.id)!;
+    AppSession.instance.addPhotoReview(
+      store: store,
+      body: '이용내역에서 다시 보는 포토 리뷰입니다.',
+      photoAsset: AppAssets.foodHonguh,
+      visitId: visit.id,
+    );
+
+    await tester.pumpWidget(const MaterialApp(home: ReservationsScreen()));
+    expect(find.text('작성한 리뷰 보기'), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right_rounded), findsWidgets);
+
+    await tester.tap(find.text('작성한 리뷰 보기'));
+    await tester.pumpAndSettle();
+    expect(find.text('작성한 리뷰'), findsOneWidget);
+    expect(find.text('이용내역에서 다시 보는 포토 리뷰입니다.'), findsOneWidget);
   });
 }
 

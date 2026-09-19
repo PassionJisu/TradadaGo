@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:foodridge/data/sangju_floor2.dart';
 import 'package:foodridge/data/sangju_indoor_map.dart';
 import 'package:foodridge/map/indoor_camera.dart';
+import 'package:foodridge/map/market_blueprint.dart';
 import 'package:foodridge/map/sangju_indoor_painter.dart';
 import 'package:foodridge/models/indoor_stall.dart';
 import 'package:foodridge/screens/sangju_indoor_map_screen.dart';
@@ -68,6 +70,34 @@ void main() {
     expect(store.qrPayload, 'TRADADAGO:sj-test');
     expect(store.products, isNotEmpty);
     expect(store.products.first.name, contains('테스트점포'));
+    expect(stall.hasDiscountProducts, isTrue);
+  });
+
+  test('discount stalls get map pins', () {
+    final goodsPath = Path()..addRect(const Rect.fromLTWH(0, 0, 40, 40));
+    final storagePath = Path()..addRect(const Rect.fromLTWH(50, 0, 40, 40));
+    final goods = IndoorStall(
+      id: 'sj-goods',
+      name: '잡화점',
+      floor: 1,
+      path: goodsPath,
+      bounds: goodsPath.getBounds(),
+    );
+    final storage = IndoorStall(
+      id: 'sj-storage',
+      name: '창고',
+      floor: 1,
+      path: storagePath,
+      bounds: storagePath.getBounds(),
+      use: StallUse.storage,
+    );
+    final pins = SangjuIndoorPainter.pickDiscountPins(
+      [goods, storage],
+      scale: 1.1,
+    );
+    expect(goods.hasDiscountProducts, isTrue);
+    expect(storage.hasDiscountProducts, isFalse);
+    expect(pins.map((s) => s.id), ['sj-goods']);
   });
 
   test('avatar screen size follows map zoom', () {
@@ -98,13 +128,31 @@ void main() {
     await tester.runAsync(() async {
       data = await SangjuIndoorMap.load();
     });
-    expect(data.stalls, hasLength(186));
+    expect(data.stalls.where((s) => s.floor == 1).length, 184);
+    expect(data.stalls.where((s) => s.floor == 2).length, SangjuFloor2.cells().length);
+    expect(data.stalls, hasLength(184 + SangjuFloor2.cells().length));
     expect(data.mapSize, const Size(2800, 1400));
     expect(data.startFocus.dx, closeTo(data.pad + data.mapSize.width / 2, 0.1));
     expect(data.startFocus.dy, closeTo(data.pad + data.mapSize.height - 70, 0.1));
     expect(data.stalls.any((s) => s.name == '동성신발 백화점'), isTrue);
     expect(data.stalls.any((s) => s.name == '새마을종묘사'), isTrue);
-    expect(data.stalls.where((s) => s.floor == 2), hasLength(2));
+    expect(data.stalls.any((s) => s.name == '상인교육장' && s.floor == 2), isTrue);
+    final floor2Bounds = data.stalls
+        .where((s) => s.floor == 2)
+        .map((s) => s.bounds)
+        .reduce((a, b) => a.expandToInclude(b));
+    expect(floor2Bounds.width, greaterThan(2400));
+    expect(floor2Bounds.height, greaterThan(1000));
+
+    final camera = IndoorCamera(
+      mapSize: data.mapSize,
+      pad: data.pad,
+      focus: data.startFocus,
+    );
+    final firstFloor = data.stallsOnFloor(1).first;
+    final at = firstFloor.bounds.center;
+    expect(camera.hit(at, data.stallsOnFloor(1))?.floor, 1);
+    expect(camera.hit(at, data.stallsOnFloor(1))?.id, isNot(startsWith('sj-2f-')));
     expect(
       data.uniqueNamed(data.stalls).length,
       lessThan(data.stalls.length),
@@ -141,7 +189,7 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('시장 데모'), findsOneWidget);
-    expect(find.textContaining('점포 186곳'), findsOneWidget);
+    expect(find.textContaining('점포 ${data.stalls.length}곳'), findsOneWidget);
     expect(find.textContaining('캐릭터 고정'), findsOneWidget);
     expect(find.text('카테고리 선택'), findsOneWidget);
     expect(find.text('1층 선택'), findsOneWidget);
@@ -206,7 +254,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pump();
-    expect(find.textContaining('0/186곳'), findsOneWidget);
+    expect(find.textContaining('0/${SangjuIndoorMap.publishedStallCount}곳'), findsOneWidget);
     expect(find.text('1층 선택'), findsOneWidget);
     expect(find.byType(InteractiveViewer), findsOneWidget);
   });

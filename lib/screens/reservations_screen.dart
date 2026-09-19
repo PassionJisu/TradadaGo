@@ -5,6 +5,7 @@ import '../models/reservation.dart';
 import '../models/store.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
+import 'my_visit_review_screen.dart';
 import 'write_review_screen.dart';
 
 class ReservationsScreen extends StatelessWidget {
@@ -51,78 +52,117 @@ class ReservationsScreen extends StatelessWidget {
                       final r = items[i];
                       final store = _storeFor(r);
                       final canReview =
-                          AppSession.instance.canWriteReview(store.id);
-                      final reviewed = AppSession.instance.hasPainted(store.id);
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
+                          AppSession.instance.canWriteReviewFor(r);
+                      final review = r.hasReview
+                          ? AppSession.instance.reviewById(r.reviewId)
+                          : null;
+                      return Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        child: InkWell(
                           borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              r.storeName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.navy,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(r.productName),
-                            const SizedBox(height: 6),
-                            Text(
-                              r.isQrVisit
-                                  ? 'QR 방문 인증'
-                                  : '${_won(r.price)} · 픽업 예약',
-                              style: const TextStyle(
-                                color: AppColors.pinRed,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            if (!r.isQrVisit &&
-                                AppSession.instance.hasQrVerified(r.storeId))
-                              const Padding(
-                                padding: EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'QR 인증됨',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.teal,
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(height: 8),
-                            if (canReview)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: FilledButton.tonalIcon(
-                                  onPressed: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            WriteReviewScreen(store: store),
+                          onTap: review == null
+                              ? null
+                              : () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          MyVisitReviewScreen(review: review),
+                                    ),
+                                  );
+                                },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        r.storeName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.navy,
+                                        ),
                                       ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.photo_camera_outlined),
-                                  label: Text(
-                                    reviewed ? '포토 리뷰 더 남기기' : '포토 리뷰 쓰기',
+                                      const SizedBox(height: 4),
+                                      Text(r.productName),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        r.isQrVisit
+                                            ? 'QR 방문 인증'
+                                            : '${_won(r.price)} · 픽업 예약',
+                                        style: const TextStyle(
+                                          color: AppColors.pinRed,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        r.timeLabel,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      if (canReview)
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: FilledButton.tonalIcon(
+                                            onPressed: () {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      WriteReviewScreen(
+                                                    store: store,
+                                                    visitId: r.id,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            icon: const Icon(
+                                              Icons.photo_camera_outlined,
+                                            ),
+                                            label: const Text('포토 리뷰 쓰기'),
+                                          ),
+                                        )
+                                      else if (r.hasReview)
+                                        const Text(
+                                          '작성한 리뷰 보기',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.teal,
+                                          ),
+                                        )
+                                      else
+                                        const Text(
+                                          '가게 앞에서 QR 인증하면 방문이 추가되고 리뷰를 1회 작성할 수 있습니다.',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF6B7280),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
-                              )
-                            else
-                              const Text(
-                                '가게 앞에서 QR 인증하면 여기서 리뷰를 작성할 수 있습니다.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF6B7280),
-                                ),
-                              ),
-                          ],
+                                if (r.hasReview)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 8, top: 4),
+                                    child: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: Color(0xFF9AA3AF),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     },

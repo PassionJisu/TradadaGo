@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +21,9 @@ class SangjuIndoorPainter extends CustomPainter {
     this.useFilter,
     this.visitedIds = const {},
     this.clipToMarket = false,
+    this.showDiscountPins = true,
+    this.pinIdle,
+    this.pinActive,
   });
 
   final List<IndoorStall> stalls;
@@ -32,6 +36,9 @@ class SangjuIndoorPainter extends CustomPainter {
   final StallUse? useFilter;
   final Set<String> visitedIds;
   final bool clipToMarket;
+  final bool showDiscountPins;
+  final ui.Image? pinIdle;
+  final ui.Image? pinActive;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -111,6 +118,7 @@ class SangjuIndoorPainter extends CustomPainter {
         pad + mapSize.height - 36,
       ),
     );
+    _drawDiscountPins(canvas);
     canvas.restore();
   }
 
@@ -220,6 +228,98 @@ class SangjuIndoorPainter extends CustomPainter {
     );
   }
 
+  static List<IndoorStall> pickDiscountPins(
+    List<IndoorStall> stalls, {
+    required double scale,
+    int? floorFilter,
+    StallUse? useFilter,
+  }) {
+    final ranked = [
+      for (final stall in stalls)
+        if ((floorFilter == null || stall.floor == floorFilter) &&
+            (useFilter == null || stall.use == useFilter) &&
+            stall.hasDiscountProducts)
+          stall,
+    ]..sort((a, b) {
+        final aa = a.bounds.width * a.bounds.height;
+        final ba = b.bounds.width * b.bounds.height;
+        return ba.compareTo(aa);
+      });
+    final seen = <String>{};
+    final occupied = <Rect>[];
+    final kept = <IndoorStall>[];
+    final pinH = 32 / math.max(scale, 0.08);
+    final pinW = pinH * 0.72;
+    for (final stall in ranked) {
+      if (!seen.add(stall.name)) continue;
+      final center = stall.bounds.center;
+      final rect = Rect.fromCenter(
+        center: Offset(center.dx, center.dy - pinH * 0.35),
+        width: pinW,
+        height: pinH,
+      ).inflate(3);
+      if (occupied.any((placed) => placed.overlaps(rect))) continue;
+      occupied.add(rect);
+      kept.add(stall);
+    }
+    return kept;
+  }
+
+  void _drawDiscountPins(Canvas canvas) {
+    if (!showDiscountPins) return;
+    final pins = pickDiscountPins(
+      stalls,
+      scale: scale,
+      floorFilter: floorFilter,
+      useFilter: useFilter,
+    );
+    for (final stall in pins) {
+      final highlight = stall.id == highlightId;
+      final pinH = (highlight ? 38 : 32) / math.max(scale, 0.08);
+      final image = highlight && pinActive != null ? pinActive : pinIdle;
+      final aspect = image == null ? 0.72 : image.width / image.height;
+      final pinW = pinH * aspect;
+      final center = stall.bounds.center;
+      final dst = Rect.fromCenter(
+        center: Offset(center.dx, center.dy - pinH * 0.38),
+        width: pinW,
+        height: pinH,
+      );
+      if (image != null) {
+        canvas.drawImageRect(
+          image,
+          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+          dst,
+          Paint()..filterQuality = FilterQuality.high,
+        );
+      } else {
+        _drawFallbackPin(canvas, dst, highlight);
+      }
+    }
+  }
+
+  void _drawFallbackPin(Canvas canvas, Rect dst, bool highlight) {
+    final path = Path()
+      ..moveTo(dst.center.dx, dst.bottom)
+      ..quadraticBezierTo(dst.left, dst.center.dy + dst.height * 0.08, dst.left, dst.top + dst.height * 0.38)
+      ..arcToPoint(
+        Offset(dst.right, dst.top + dst.height * 0.38),
+        radius: Radius.circular(dst.width * 0.48),
+        clockwise: true,
+      )
+      ..quadraticBezierTo(dst.right, dst.center.dy + dst.height * 0.08, dst.center.dx, dst.bottom)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()..color = highlight ? AppColors.goldDeep : AppColors.gold,
+    );
+    canvas.drawCircle(
+      Offset(dst.center.dx, dst.top + dst.height * 0.34),
+      dst.width * 0.22,
+      Paint()..color = Colors.white,
+    );
+  }
+
   @override
   bool shouldRepaint(covariant SangjuIndoorPainter oldDelegate) {
     return oldDelegate.scale != scale ||
@@ -229,6 +329,9 @@ class SangjuIndoorPainter extends CustomPainter {
         oldDelegate.useFilter != useFilter ||
         oldDelegate.stalls != stalls ||
         !setEquals(oldDelegate.visitedIds, visitedIds) ||
-        oldDelegate.clipToMarket != clipToMarket;
+        oldDelegate.clipToMarket != clipToMarket ||
+        oldDelegate.showDiscountPins != showDiscountPins ||
+        oldDelegate.pinIdle != pinIdle ||
+        oldDelegate.pinActive != pinActive;
   }
 }

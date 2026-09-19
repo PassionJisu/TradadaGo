@@ -49,7 +49,7 @@ class _MarketRow extends StatelessWidget {
     final total =
         isDemo ? SangjuIndoorMap.publishedStallCount : market.stores.length;
     final painted = isDemo
-        ? session.qrVerifiedStoreIds.where((id) => id.startsWith('sj-')).length
+        ? session.paintedStoreIds.where((id) => id.startsWith('sj-')).length
         : market.stores.where((s) => session.hasPainted(s.id)).length;
     final ready = isDemo || total > 0;
     return Material(

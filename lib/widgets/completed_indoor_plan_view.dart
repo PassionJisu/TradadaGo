@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../data/sangju_indoor_map.dart';
 import '../map/market_blueprint.dart';
 import '../map/sangju_indoor_painter.dart';
+import '../map/store_pin_images.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
 import 'market_map_controls.dart';
@@ -39,6 +40,8 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
     final data = await SangjuIndoorMap.load();
     if (!mounted) return;
     setState(() => _data = data);
+    await StorePinImages.ensureLoaded();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -77,7 +80,7 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
       );
     }
 
-    final visited = widget.session.qrVerifiedStoreIds;
+    final visited = widget.session.paintedStoreIds;
     final painted = data.stalls.where((s) => visited.contains(s.id)).length;
     final fit = _viewport.isEmpty
         ? 0.2
@@ -155,6 +158,8 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
                           useFilter: _filterUse,
                           visitedIds: Set<String>.of(visited),
                           clipToMarket: true,
+                          pinIdle: StorePinImages.idle,
+                          pinActive: StorePinImages.active,
                         ),
                       ),
                     ),
@@ -207,7 +212,7 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     subtitle: Text(
-                      visited.contains(stall.id) ? 'QR 인증 · 색칠됨' : '아직 방문 전',
+                      visited.contains(stall.id) ? '리뷰 · 색칠됨' : '아직 리뷰 전',
                     ),
                   ),
               ],

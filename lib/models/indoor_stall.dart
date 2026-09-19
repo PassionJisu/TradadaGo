@@ -22,6 +22,12 @@ class IndoorStall {
   final Rect bounds;
   final StallUse use;
 
+  bool get hasDiscountProducts => indoorDemoProducts(
+        stallId: id,
+        stallName: name,
+        use: use,
+      ).isNotEmpty;
+
   Store asStore() {
     return Store(
       id: id,

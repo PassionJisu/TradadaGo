@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../map/market_blueprint.dart';
 import '../models/indoor_stall.dart';
+import 'sangju_floor2.dart';
 
 class SangjuIndoorMap {
   SangjuIndoorMap._({
@@ -15,7 +16,11 @@ class SangjuIndoorMap {
 
   static const asset = 'assets/data/sangju_indoor_stalls.json';
   static const plazaPad = 1200.0;
-  static const publishedStallCount = 186;
+  static int get publishedStallCount {
+    final cached = _cached;
+    if (cached != null) return cached.stalls.length;
+    return 184 + SangjuFloor2.cells().length;
+  }
 
   static SangjuIndoorMap? _cached;
 
@@ -38,7 +43,7 @@ class SangjuIndoorMap {
         MarketFloor(
           id: '2',
           label: '2층',
-          caption: '사무실 · 교육장',
+          caption: '의류 · 침구 · 그릇 · 2층 먹거리',
           blocks: [],
         ),
       ];
@@ -82,7 +87,9 @@ class SangjuIndoorMap {
     );
     final stalls = <IndoorStall>[
       for (final item in raw['stalls'] as List)
-        _stall(item as Map<String, dynamic>, plazaPad),
+        if (item is Map<String, dynamic> && item['floor'] != 2)
+          _stall(item, plazaPad),
+      ..._floor2Stalls(plazaPad),
     ];
     return _cached = SangjuIndoorMap._(
       stalls: stalls,
@@ -154,8 +161,20 @@ class SangjuIndoorMap {
         name.contains('바베큐') ||
         name.contains('포차') ||
         name.contains('분식') ||
-        name.contains('카페')) {
+        name.contains('카페') ||
+        name.contains('김밥') ||
+        name.contains('호떡') ||
+        name.contains('전집') ||
+        name.contains('어묵') ||
+        name.contains('찐빵') ||
+        name.contains('식혜')) {
       return StallUse.food;
+    }
+    if (name.contains('이불') || name.contains('침구') || name.contains('베개')) {
+      return StallUse.clothes;
+    }
+    if (name.contains('그릇') || name.contains('도마') || name.contains('수저')) {
+      return StallUse.kitchen;
     }
     if (name.contains('포목') ||
         name.contains('한복') ||
@@ -163,7 +182,8 @@ class SangjuIndoorMap {
         name.contains('란제리') ||
         name.contains('피복') ||
         name.contains('승복') ||
-        name.contains('신발')) {
+        name.contains('신발') ||
+        name.contains('저고리')) {
       return StallUse.clothes;
     }
     if (name.contains('미용') ||
@@ -172,9 +192,38 @@ class SangjuIndoorMap {
         name.contains('수선') ||
         name.contains('세탁') ||
         name.contains('사무실') ||
-        name.contains('교육')) {
+        name.contains('교육') ||
+        name.contains('계단')) {
       return StallUse.service;
     }
     return StallUse.goods;
+  }
+
+  static List<IndoorStall> _floor2Stalls(double pad) {
+    final stalls = <IndoorStall>[];
+    var index = 0;
+    for (final cell in SangjuFloor2.cells()) {
+      index += 1;
+      final path = Path()
+        ..addRect(
+          Rect.fromLTRB(
+            cell.l + pad,
+            cell.t + pad,
+            cell.r + pad,
+            cell.b + pad,
+          ),
+        );
+      stalls.add(
+        IndoorStall(
+          id: 'sj-2f-${index.toString().padLeft(3, '0')}',
+          name: cell.name,
+          floor: 2,
+          path: path,
+          bounds: path.getBounds(),
+          use: inferStallUse(cell.name),
+        ),
+      );
+    }
+    return stalls;
   }
 }
