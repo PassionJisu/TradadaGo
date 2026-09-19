@@ -19,6 +19,17 @@ abstract final class AppAssets {
   static const foodJeon = 'assets/images/food_jeon.png';
   static const foodFruit = 'assets/images/food_fruit.png';
   static const foodSeafood = 'assets/images/food_seafood.png';
+  static const foodHonguh = 'assets/images/food_honguh.png';
+  static const foodYukhoe = 'assets/images/food_yukhoe.png';
+  static const foodMackerel = 'assets/images/food_mackerel.png';
+  static const foodTteok = 'assets/images/food_tteok.png';
+  static const foodGunbam = 'assets/images/food_gunbam.png';
+  static const foodDried = 'assets/images/food_dried.png';
+  static const foodBojagi = 'assets/images/food_bojagi.png';
+  static const foodYakgwa = 'assets/images/food_yakgwa.png';
+  static const foodSuyuk = 'assets/images/food_suyuk.png';
+  static const foodBulgogi = 'assets/images/food_bulgogi.png';
+  static const foodDonggeuran = 'assets/images/food_donggeuran.png';
   static const landmarkMudeung = 'assets/images/landmark_mudeung.png';
   static const landmarkAcc = 'assets/images/landmark_acc.png';
   static const landmark518 = 'assets/images/landmark_518.png';

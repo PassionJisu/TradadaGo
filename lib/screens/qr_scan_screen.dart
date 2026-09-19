@@ -7,6 +7,7 @@ import '../models/store.dart';
 import '../state/app_session.dart';
 import '../state/location_session.dart';
 import '../theme/app_colors.dart';
+import 'write_review_screen.dart';
 
 class QrScanScreen extends StatefulWidget {
   const QrScanScreen({super.key, required this.store});
@@ -70,26 +71,29 @@ class _QrScanScreenState extends State<QrScanScreen> {
       return;
     }
     _handled = true;
-    final grant = AppSession.instance.addVisitStamp(widget.store.id);
+    AppSession.instance.markQrVerified(widget.store.id);
     if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(grant.added ? '스탬프 획득!' : '오늘은 이미 찍었습니다'),
+        title: const Text('QR 인증 성공'),
         content: Text(
-          grant.added
-              ? '${widget.store.name} 스탬프가 나의 체크판에 찍혔습니다.\n${grant.message}'
-              : grant.message,
+          '${widget.store.name} 앞에서 인증되었습니다.\n사진을 포함한 리뷰를 남기면 방문 완료 · 스탬프 · 지도 색칠이 반영됩니다.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('확인'),
+            child: const Text('리뷰 작성하기'),
           ),
         ],
       ),
     );
-    if (mounted) Navigator.pop(context);
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => WriteReviewScreen(store: widget.store),
+      ),
+    );
   }
 
   @override

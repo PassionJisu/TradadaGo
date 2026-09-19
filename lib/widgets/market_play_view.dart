@@ -15,6 +15,7 @@ import '../state/location_session.dart';
 import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 import 'floor_plan_painter.dart';
+import 'market_map_controls.dart';
 import 'store_preview_sheet.dart';
 
 class MarketPlayView extends StatefulWidget {
@@ -38,6 +39,9 @@ class MarketPlayViewState extends State<MarketPlayView>
 
   MarketBlueprint? _blueprint;
   String? _floorId;
+  String? _selectedWingId;
+  StallUse? _filterUse;
+  bool _followUser = true;
   Size _viewport = Size.zero;
 
   /// 점포 칸 이름을 읽을 수 있는 배율.
@@ -46,7 +50,7 @@ class MarketPlayViewState extends State<MarketPlayView>
   /// 핀 이름표가 겹치지 않는 배율.
   static const _markerLabelScale = 0.55;
   static const _topInset = 132.0;
-  static const _bottomInset = 214.0;
+  static const _bottomInset = 248.0;
 
   LocationSession get _loc => LocationSession.instance;
   AppSession get _session => AppSession.instance;
@@ -60,23 +64,41 @@ class MarketPlayViewState extends State<MarketPlayView>
     )..repeat(reverse: true);
     _blueprint = MarketBlueprints.forMarket(widget.market);
     _floorId = _blueprint?.gpsFloor.id;
-    _loc.addListener(_onTick);
-    _session.addListener(_onTick);
-    _controller.addListener(_onTick);
+    _loc.addListener(_onLocation);
+    _session.addListener(_onSession);
+    _controller.addListener(_onTransform);
   }
 
   @override
   void dispose() {
-    _loc.removeListener(_onTick);
-    _session.removeListener(_onTick);
-    _controller.removeListener(_onTick);
+    _loc.removeListener(_onLocation);
+    _session.removeListener(_onSession);
+    _controller.removeListener(_onTransform);
     _controller.dispose();
     _pulse.dispose();
     super.dispose();
   }
 
-  void _onTick() {
+  void _onSession() {
     if (mounted) setState(() {});
+  }
+
+  void _onTransform() {
+    if (mounted) setState(() {});
+  }
+
+  void _onLocation() {
+    if (!mounted) return;
+    final blueprint = _blueprint;
+    final floor = _floor;
+    if (blueprint != null &&
+        floor != null &&
+        floor.isGpsFloor &&
+        _selectedWingId == null &&
+        (_followUser || _loc.demoWalking)) {
+      _focusOn(_avatarCanvas(blueprint), scale: 1.18);
+    }
+    setState(() {});
   }
 
   MarketFloor? get _floor {
@@ -101,11 +123,11 @@ class MarketPlayViewState extends State<MarketPlayView>
 
     final avatar = _avatarCanvas(blueprint);
     Store? best;
-    var bestDist = 78.0;
+    var bestDist = 56.0;
     for (final stall in floor.demoStores) {
       final store = _storeById(stall.storeId!);
       if (store == null) continue;
-      final d = (stall.anchor - avatar).distance;
+      final d = _distanceToRect(avatar, stall.rect);
       if (d < bestDist) {
         bestDist = d;
         best = store;
@@ -125,6 +147,14 @@ class MarketPlayViewState extends State<MarketPlayView>
       setState(() => _floorId = floor.id);
     }
     showStorePreviewSheet(context, store, nearby: true);
+  }
+
+  double _distanceToRect(Offset point, Rect rect) {
+    final nearest = Offset(
+      point.dx.clamp(rect.left, rect.right),
+      point.dy.clamp(rect.top, rect.bottom),
+    );
+    return (nearest - point).distance;
   }
 
   Store? _storeById(String id) {
@@ -188,10 +218,38 @@ class MarketPlayViewState extends State<MarketPlayView>
   }
 
   void _onPlanTap(Offset canvasPoint, MarketFloor floor) {
-    for (final stall in floor.stalls) {
-      if (!stall.contains(canvasPoint)) continue;
-      _openStall(stall, floor);
+    final selected = _selectedWingId == null
+        ? null
+        : floor.blockById(_selectedWingId!);
+    if (selected != null) {
+      for (final stall in selected.stalls) {
+        if (!stall.contains(canvasPoint)) {
+          continue;
+        }
+        _openStall(stall, floor);
+        return;
+      }
+      if (!selected.rect.inflate(36).contains(canvasPoint)) {
+        _showOverview();
+      }
       return;
+    }
+
+    final block = floor.blockAt(canvasPoint);
+    if (block == null) return;
+    if (_filterUse != null && !block.matchesUse(_filterUse)) return;
+    setState(() {
+      _selectedWingId = block.id;
+      _followUser = false;
+    });
+    _fitPlan(_viewport, block.rect.inflate(28));
+  }
+
+  void _showOverview() {
+    final blueprint = _blueprint;
+    setState(() => _selectedWingId = null);
+    if (blueprint != null) {
+      _fitPlan(_viewport, blueprint.focus);
     }
   }
 
@@ -244,26 +302,35 @@ class MarketPlayViewState extends State<MarketPlayView>
                   style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                 ),
                 for (final block in floor.blocks) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    block.name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      color: block.theme.color,
+                  if (_filterUse != null && !block.matchesUse(_filterUse))
+                    const SizedBox.shrink()
+                  else ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      '${block.theme.emoji} ${block.code} · ${block.name}',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.navy,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  for (final stall in block.stalls)
-                    _IndexRow(
-                      stall: stall,
-                      visited: stall.storeId != null &&
-                          _session.hasEverVisited(stall.storeId!),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _focusOn(stall.anchor, scale: 1.1);
-                      },
-                    ),
+                    const SizedBox(height: 6),
+                    for (final stall in block.stalls)
+                      if (_filterUse == null || stall.use == _filterUse)
+                        _IndexRow(
+                          stall: stall,
+                          visited: stall.storeId != null &&
+                              _session.hasPainted(stall.storeId!),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            setState(() {
+                              _selectedWingId = block.id;
+                              _followUser = false;
+                            });
+                            _fitPlan(_viewport, block.rect.inflate(28));
+                          },
+                        ),
+                  ],
                 ],
               ],
             );
@@ -285,7 +352,19 @@ class MarketPlayViewState extends State<MarketPlayView>
         if (viewport != _viewport) {
           _viewport = viewport;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _fitPlan(viewport, blueprint.focus);
+            if (!mounted) return;
+            if (_selectedWingId != null) {
+              final block = floor.blockById(_selectedWingId!);
+              if (block != null) {
+                _fitPlan(viewport, block.rect.inflate(28));
+                return;
+              }
+            }
+            if (_followUser && floor.isGpsFloor) {
+              _focusOn(_avatarCanvas(blueprint), scale: 1.18);
+              return;
+            }
+            _fitPlan(viewport, blueprint.focus);
           });
         }
 
@@ -313,21 +392,18 @@ class MarketPlayViewState extends State<MarketPlayView>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        if (floor.backgroundAsset != null)
-                          Image.asset(
-                            floor.backgroundAsset!,
-                            fit: BoxFit.fill,
-                            filterQuality: FilterQuality.high,
-                          ),
                         CustomPaint(
                           size: blueprint.canvas,
                           painter: FloorPlanPainter(
                             floor: floor,
-                            visitedStoreIds: _session.uniqueVisitStoreIds,
+                            paintedStoreIds: _session.paintedStoreIds,
                             activeStoreId: nearbyFloor?.id == floor.id
                                 ? nearby?.id
                                 : null,
-                            showStallLabels: _scale >= _labelScale,
+                            showStallLabels:
+                                _selectedWingId != null || _scale >= _labelScale,
+                            selectedBlockId: _selectedWingId,
+                            filterUse: _filterUse,
                           ),
                         ),
                       ],
@@ -338,6 +414,44 @@ class MarketPlayViewState extends State<MarketPlayView>
               ..._storeMarkers(floor),
               if (floor.isGpsFloor) _avatarMarker(_avatarCanvas(blueprint)),
               _chrome(blueprint, floor, nearby, nearbyFloor),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 216,
+                child: FilledButton.icon(
+                  onPressed: _loc.demoWalking
+                      ? _loc.stopDemoWalk
+                      : () {
+                          if (widget.market.id ==
+                              GwangjuMarkets.yangdong.id) {
+                            setState(() {
+                              _followUser = true;
+                              _selectedWingId = null;
+                              if (!floor.isGpsFloor) {
+                                _floorId = blueprint.gpsFloor.id;
+                              }
+                            });
+                            _loc.startYangdongDemoWalk();
+                          }
+                        },
+                  icon: Icon(
+                    _loc.demoWalking
+                        ? Icons.stop_rounded
+                        : Icons.directions_walk_rounded,
+                  ),
+                  label: Text(_loc.demoWalking ? '시연 경로 정지' : '골목 시연 걷기'),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 158,
+                child: PaintProgressBanner(
+                  painted:
+                      blueprint.paintProgress(_session.paintedStoreIds).painted,
+                  total: blueprint.paintProgress(_session.paintedStoreIds).total,
+                ),
+              ),
             ],
           ),
         );
@@ -400,7 +514,7 @@ class MarketPlayViewState extends State<MarketPlayView>
           child: _StoreMarker(
             store: store,
             active: active,
-            visited: _session.hasEverVisited(store.id),
+            visited: _session.hasPainted(store.id),
             showLabel: active || showLabels,
             pulse: _pulse,
             onTap: () => showStorePreviewSheet(context, store, nearby: active),
@@ -456,9 +570,46 @@ class MarketPlayViewState extends State<MarketPlayView>
     final sameFloor = nearbyFloor == null || nearbyFloor.id == floor.id;
 
     return SafeArea(
+      bottom: false,
       child: Column(
         children: [
           _header(floor),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+            child: MarketMapToolbar(
+              categoryLabel: _filterUse == null
+                  ? '카테고리 선택'
+                  : '${_filterUse!.emoji} ${_filterUse!.labelKo}',
+              floorLabel: '${floor.label} 선택',
+              categoryActive: _filterUse != null,
+              onCategory: () => showCategoryPicker(
+                context: context,
+                uses: floor.filterUses,
+                selected: _filterUse,
+                onSelected: (use) => setState(() => _filterUse = use),
+              ),
+              onFloor: () => showFloorPicker(
+                context: context,
+                floors: blueprint.floors,
+                selectedId: floor.id,
+                alertFloorId: nearbyFloor?.id,
+                onSelected: (id) => setState(() {
+                  _floorId = id;
+                  _selectedWingId = null;
+                }),
+              ),
+              onStores: () => _openIndex(floor),
+            ),
+          ),
+          if (_selectedWingId != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: _Banner(
+                text: '${floor.blockById(_selectedWingId!)?.code ?? '이 동'} 확대 중. 가게를 눌러 정보를 보세요.',
+                actionLabel: '전체 지도',
+                onAction: _showOverview,
+              ),
+            ),
           if (nearby != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -472,20 +623,7 @@ class MarketPlayViewState extends State<MarketPlayView>
                     : () => setState(() => _floorId = nearbyFloor.id),
               ),
             ),
-          Expanded(
-            child: Row(
-              children: [
-                const Spacer(),
-                if (blueprint.isMultiFloor)
-                  _FloorTabs(
-                    floors: blueprint.floors,
-                    selectedId: floor.id,
-                    alertFloorId: nearbyFloor?.id,
-                    onSelect: (id) => setState(() => _floorId = id),
-                  ),
-              ],
-            ),
-          ),
+          const Expanded(child: SizedBox.expand()),
           _bottomControls(blueprint, floor),
         ],
       ),
@@ -494,85 +632,46 @@ class MarketPlayViewState extends State<MarketPlayView>
 
   Widget _bottomControls(MarketBlueprint blueprint, MarketFloor floor) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 92),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: Column(
-              children: [
-                _RoundButton(
-                  icon: Icons.format_list_numbered_rounded,
-                  tooltip: '점포 목록',
-                  onTap: () => _openIndex(floor),
-                ),
-                const SizedBox(height: 8),
-                _RoundButton(
-                  icon: Icons.my_location_rounded,
-                  tooltip: '내 위치',
-                  onTap: () {
-                    if (!floor.isGpsFloor) {
-                      setState(() => _floorId = blueprint.gpsFloor.id);
-                    }
-                    _focusOn(_avatarCanvas(blueprint), scale: 1.0);
-                  },
-                ),
-                const SizedBox(height: 8),
-                _RoundButton(
-                  icon: Icons.zoom_out_map_rounded,
-                  tooltip: '전체 보기',
-                  onTap: () => _fitPlan(_viewport, blueprint.focus),
-                ),
-              ],
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 276),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Column(
+          children: [
+            _RoundButton(
+              icon: Icons.my_location_rounded,
+              tooltip: '내 위치 따라가기',
+              onTap: () {
+                setState(() {
+                  _followUser = true;
+                  _selectedWingId = null;
+                  if (!floor.isGpsFloor) {
+                    _floorId = blueprint.gpsFloor.id;
+                  }
+                });
+                _focusOn(_avatarCanvas(blueprint), scale: 1.18);
+              },
             ),
-          ),
-          const SizedBox(height: 10),
-          Center(
-            child: Material(
-              color: const Color(0xE6FFFFFF),
-              borderRadius: BorderRadius.circular(12),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                child: Text(
-                  '확대하면 점포 이름이 보이고, 아바타가 가게 앞에 오면 핀이 켜집니다.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.deepBlue,
-                  ),
-                ),
-              ),
+            const SizedBox(height: 8),
+            _RoundButton(
+              icon: Icons.zoom_out_map_rounded,
+              tooltip: '전체 보기',
+              onTap: () {
+                setState(() {
+                  _followUser = false;
+                  _selectedWingId = null;
+                });
+                _fitPlan(_viewport, blueprint.focus);
+              },
             ),
-          ),
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            onPressed: _loc.demoWalking
-                ? _loc.stopDemoWalk
-                : () {
-                    if (widget.market.id == GwangjuMarkets.yangdong.id) {
-                      if (!floor.isGpsFloor) {
-                        setState(() => _floorId = blueprint.gpsFloor.id);
-                      }
-                      _loc.startYangdongDemoWalk();
-                    }
-                  },
-            icon: Icon(
-              _loc.demoWalking
-                  ? Icons.stop_rounded
-                  : Icons.directions_walk_rounded,
-            ),
-            label: Text(_loc.demoWalking ? '시연 경로 정지' : '골목 시연 걷기'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _header(MarketFloor? floor) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
       child: Material(
         color: const Color(0xF2FFF8E8),
         borderRadius: BorderRadius.circular(22),
@@ -656,7 +755,7 @@ class _IndexRow extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                stall.label,
+                '${stall.use.emoji} ${stall.label}',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   color: stall.use == StallUse.vacant
@@ -788,94 +887,6 @@ class _StoreMarker extends StatelessWidget {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _FloorTabs extends StatelessWidget {
-  const _FloorTabs({
-    required this.floors,
-    required this.selectedId,
-    required this.alertFloorId,
-    required this.onSelect,
-  });
-
-  final List<MarketFloor> floors;
-  final String selectedId;
-  final String? alertFloorId;
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 10),
-      child: Material(
-        color: const Color(0xF2FFFFFF),
-        borderRadius: BorderRadius.circular(18),
-        elevation: 3,
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final floor in floors)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: _tab(floor),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _tab(MarketFloor floor) {
-    final selected = floor.id == selectedId;
-    final alert = floor.id == alertFloorId && !selected;
-    return InkWell(
-      borderRadius: BorderRadius.circular(13),
-      onTap: () => onSelect(floor.id),
-      child: Container(
-        width: 46,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? AppColors.gold : const Color(0xFFF3F6FA),
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(
-            color: selected ? AppColors.goldDeep : const Color(0xFFDCE3EB),
-            width: selected ? 1.6 : 1,
-          ),
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Text(
-              floor.label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: selected ? AppColors.navy : const Color(0xFF7C8896),
-              ),
-            ),
-            if (alert)
-              Positioned(
-                right: -2,
-                top: -2,
-                child: Container(
-                  width: 9,
-                  height: 9,
-                  decoration: const BoxDecoration(
-                    color: AppColors.pinRed,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

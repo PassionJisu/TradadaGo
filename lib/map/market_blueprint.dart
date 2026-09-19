@@ -20,6 +20,47 @@ enum StallUse {
 }
 
 extension StallUseStyle on StallUse {
+  String get emoji => switch (this) {
+    StallUse.seafood => '🐟',
+    StallUse.dried => '🦐',
+    StallUse.produce => '🍎',
+    StallUse.meat => '🥩',
+    StallUse.food => '🍜',
+    StallUse.snack => '🍡',
+    StallUse.sidedish => '🥗',
+    StallUse.riceCake => '🍡',
+    StallUse.goods => '🧺',
+    StallUse.clothes => '👕',
+    StallUse.kitchen => '🍳',
+    StallUse.service => '🛎️',
+    StallUse.vacant => '⬜',
+    StallUse.parking => '🅿️',
+    StallUse.storage => '📦',
+  };
+
+  String get labelKo => switch (this) {
+    StallUse.seafood => '수산',
+    StallUse.dried => '건어물',
+    StallUse.produce => '청과',
+    StallUse.meat => '정육',
+    StallUse.food => '먹거리',
+    StallUse.snack => '간식',
+    StallUse.sidedish => '반찬',
+    StallUse.riceCake => '떡',
+    StallUse.goods => '잡화',
+    StallUse.clothes => '의류',
+    StallUse.kitchen => '주방',
+    StallUse.service => '안내',
+    StallUse.vacant => '공실',
+    StallUse.parking => '주차',
+    StallUse.storage => '창고',
+  };
+
+  bool get isFilterable => switch (this) {
+    StallUse.vacant || StallUse.parking || StallUse.storage => false,
+    _ => true,
+  };
+
   Color get color => switch (this) {
     StallUse.seafood => const Color(0xFF4A9FE0),
     StallUse.dried => const Color(0xFF7C97AF),
@@ -116,16 +157,47 @@ class StallSpec {
 @immutable
 class MarketBlock {
   const MarketBlock({
+    required this.id,
+    required this.code,
     required this.name,
     required this.rect,
     required this.theme,
     required this.stalls,
   });
 
+  final String id;
+  final String code;
   final String name;
   final Rect rect;
   final StallUse theme;
   final List<Stall> stalls;
+
+  List<Stall> get shopStalls => stalls
+      .where(
+        (stall) =>
+            stall.use != StallUse.vacant &&
+            stall.use != StallUse.parking &&
+            stall.use != StallUse.storage,
+      )
+      .toList();
+
+  List<Stall> get colorableStalls =>
+      shopStalls.where((stall) => stall.storeId != null).toList();
+
+  bool isComplete(Set<String> paintedStoreIds) {
+    final shops = shopStalls;
+    if (shops.isEmpty) return false;
+    return shops.every(
+      (stall) =>
+          stall.storeId != null && paintedStoreIds.contains(stall.storeId),
+    );
+  }
+
+  bool matchesUse(StallUse? use) {
+    if (use == null) return true;
+    if (theme == use) return true;
+    return stalls.any((stall) => stall.use == use);
+  }
 }
 
 @immutable
@@ -207,6 +279,31 @@ class MarketFloor {
     }
     return null;
   }
+
+  MarketBlock? blockById(String id) {
+    for (final block in blocks) {
+      if (block.id == id) return block;
+    }
+    return null;
+  }
+
+  MarketBlock? blockAt(Offset point) {
+    for (final block in blocks) {
+      if (block.rect.contains(point)) return block;
+    }
+    return null;
+  }
+
+  List<Stall> get colorableStalls =>
+      stalls.where((stall) => stall.storeId != null).toList();
+
+  List<StallUse> get filterUses {
+    final seen = <StallUse>{};
+    for (final stall in stalls) {
+      if (stall.use.isFilterable) seen.add(stall.use);
+    }
+    return StallUse.values.where(seen.contains).toList();
+  }
 }
 
 @immutable
@@ -237,6 +334,17 @@ class MarketBlueprint {
 
   MarketFloor floorById(String id) =>
       floors.firstWhere((floor) => floor.id == id, orElse: () => floors.first);
+
+  List<Stall> get colorableStalls =>
+      floors.expand((floor) => floor.colorableStalls).toList();
+
+  ({int painted, int total}) paintProgress(Set<String> paintedStoreIds) {
+    final targets = colorableStalls;
+    final painted = targets
+        .where((stall) => paintedStoreIds.contains(stall.storeId))
+        .length;
+    return (painted: painted, total: targets.length);
+  }
 }
 
 /// 점포 목록을 격자로 배치해 색 구역을 만든다.
@@ -246,13 +354,22 @@ MarketBlock buildBlock({
   required StallUse theme,
   required int columns,
   required List<StallSpec> stalls,
+  String? id,
+  String? code,
   double headerHeight = 36,
   double gap = 7,
   double padding = 9,
 }) {
   assert(columns > 0);
   if (stalls.isEmpty) {
-    return MarketBlock(name: name, rect: rect, theme: theme, stalls: const []);
+    return MarketBlock(
+      id: id ?? name,
+      code: code ?? name,
+      name: name,
+      rect: rect,
+      theme: theme,
+      stalls: const [],
+    );
   }
 
   final rows = (stalls.length / columns).ceil();
@@ -285,7 +402,14 @@ MarketBlock buildBlock({
     );
   }
 
-  return MarketBlock(name: name, rect: rect, theme: theme, stalls: placed);
+  return MarketBlock(
+    id: id ?? name,
+    code: code ?? name,
+    name: name,
+    rect: rect,
+    theme: theme,
+    stalls: placed,
+  );
 }
 
 /// 골목을 향한 점포 한 줄. 격자 블록 대신 아케이드처럼 붙인다.

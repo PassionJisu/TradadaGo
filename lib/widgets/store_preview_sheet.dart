@@ -57,6 +57,18 @@ Future<void> showStorePreviewSheet(BuildContext context, Store store, {required 
             const SizedBox(height: 4),
             Text(store.category),
             const SizedBox(height: 12),
+            if (product.imageAsset != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  product.imageAsset!,
+                  height: 120,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             Text(
               product.name,
               style: const TextStyle(fontWeight: FontWeight.w700),

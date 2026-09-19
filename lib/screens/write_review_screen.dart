@@ -19,11 +19,21 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   final _body = TextEditingController();
   String? _photo;
 
-  static const _demoPhotos = [
-    AppAssets.foodGimbap,
-    AppAssets.foodChicken,
-    AppAssets.foodTteokbokki,
-  ];
+  List<String> get _demoPhotos {
+    final storePhotos = widget.store.products
+        .map((product) => product.imageAsset)
+        .whereType<String>()
+        .toSet()
+        .toList();
+    final extras = [
+      AppAssets.foodGimbap,
+      AppAssets.foodChicken,
+      AppAssets.foodTteokbokki,
+      AppAssets.foodJeon,
+      AppAssets.foodFruit,
+    ];
+    return {...storePhotos, ...extras}.toList();
+  }
 
   @override
   void dispose() {
@@ -40,12 +50,12 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       await showAppNotice(context, '리뷰를 조금 더 적어주세요.');
       return;
     }
-    AppSession.instance.addPhotoReview(
+    final grant = AppSession.instance.addPhotoReview(
       store: widget.store,
       body: _body.text.trim(),
       photoAsset: _photo!,
     );
-    await showAppNotice(context, '포토 리뷰가 등록되고 보너스 스탬프가 지급되었습니다.');
+    await showAppNotice(context, grant.message);
     if (mounted) Navigator.pop(context);
   }
 
@@ -122,7 +132,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _submit,
-            child: const Text('리뷰 올리고 스탬프 받기'),
+            child: const Text('리뷰 올리고 방문 완료하기'),
           ),
         ],
       ),

@@ -6,120 +6,47 @@ import 'package:flutter/material.dart';
 import '../map/market_blueprint.dart';
 import '../theme/app_colors.dart';
 
-/// 2D 시장 평면도를 게임 보드처럼 그린다.
-/// 시연 걷기 경로는 그리지 않는다.
+/// 점포안내도 스타일. 동·가게는 기본 흰색이고, 내 리뷰가 있으면 업종 색으로 칠한다.
 class FloorPlanPainter extends CustomPainter {
   const FloorPlanPainter({
     required this.floor,
-    required this.visitedStoreIds,
+    required this.paintedStoreIds,
     required this.activeStoreId,
     required this.showStallLabels,
+    this.selectedBlockId,
+    this.filterUse,
   });
 
   final MarketFloor floor;
-  final Set<String> visitedStoreIds;
+  final Set<String> paintedStoreIds;
   final String? activeStoreId;
-
-  /// 확대했을 때만 개별 점포 이름을 보여준다.
   final bool showStallLabels;
+  final String? selectedBlockId;
+  final StallUse? filterUse;
 
-  static const _paper = Color(0xFFF6F2E8);
+  static const _paper = Color(0xFFF7F4EC);
   static const _paperDot = Color(0x14123A63);
-  static const _streetFill = Color(0xFFE6EDF4);
-  static const _streetEdge = Color(0xFFCBD8E4);
-  static const _blockFill = Color(0xFFFFFFFF);
+  static const _streetFill = Color(0xFFC2B093);
+  static const _blankFill = Color(0xFFFBFCFD);
+  static const _blankEdge = Color(0xFFD5DEE7);
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (floor.backgroundAsset != null) {
-      _paintOverlay(canvas);
-      return;
-    }
-
     _paintPaper(canvas, size);
-    for (final street in floor.streets) {
-      _paintStreet(canvas, street);
-    }
+    _paintStreetNetwork(canvas);
     for (final block in floor.blocks) {
       _paintBlock(canvas, block);
     }
     for (final facility in floor.facilities) {
       _paintFacility(canvas, facility);
     }
-  }
-
-  void _paintOverlay(Canvas canvas) {
     for (final label in floor.labels) {
       _paintMapLabel(canvas, label);
     }
-    for (final stall in floor.stalls) {
-      final active = stall.storeId != null && stall.storeId == activeStoreId;
-      final visited =
-          stall.storeId != null && visitedStoreIds.contains(stall.storeId);
-      if (active) {
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            stall.rect.inflate(6),
-            const Radius.circular(10),
-          ),
-          Paint()
-            ..color = AppColors.gold.withValues(alpha: 0.7)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 4,
-        );
-      }
-      if (visited) {
-        final badge = Offset(stall.rect.right - 8, stall.rect.top + 8);
-        canvas.drawCircle(badge, 8, Paint()..color = AppColors.gold);
-        _drawIcon(canvas, Icons.check_rounded, badge, 11, AppColors.navy);
-      }
-      if (showStallLabels) {
-        _drawText(
-          canvas,
-          stall.label,
-          stall.rect.center,
-          TextStyle(
-            fontSize: 12,
-            height: 1.1,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-            shadows: const [
-              Shadow(color: Color(0xB0000000), blurRadius: 6),
-            ],
-          ),
-          maxWidth: stall.rect.width,
-          maxLines: 2,
-        );
-      }
-    }
-  }
-
-  void _paintMapLabel(Canvas canvas, MapLabel label) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: label.text,
-        style: TextStyle(
-          fontSize: label.fontSize,
-          height: 1,
-          fontWeight: FontWeight.w900,
-          color: label.color,
-          shadows: const [
-            Shadow(color: Color(0xE6FFF8E8), blurRadius: 8, offset: Offset(0, 1)),
-          ],
-        ),
-      ),
-      textAlign: TextAlign.center,
-      textDirection: TextDirection.ltr,
-    )..layout();
-    painter.paint(
-      canvas,
-      Offset(label.at.dx - painter.width / 2, label.at.dy - painter.height / 2),
-    );
   }
 
   void _paintPaper(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = _paper);
-
     final dot = Paint()..color = _paperDot;
     const step = 28.0;
     for (var y = step; y < size.height; y += step) {
@@ -129,129 +56,142 @@ class FloorPlanPainter extends CustomPainter {
     }
   }
 
-  void _paintStreet(Canvas canvas, Street street) {
-    final rrect = RRect.fromRectAndRadius(
-      street.rect,
-      const Radius.circular(18),
-    );
-    canvas.drawRRect(rrect, Paint()..color = _streetFill);
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..color = _streetEdge
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-
-    final center = street.rect.center;
-    final dash = Paint()
-      ..color = Colors.white
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 5;
-    if (street.isVertical) {
-      for (var y = street.rect.top + 26; y < street.rect.bottom - 26; y += 34) {
-        canvas.drawLine(Offset(center.dx, y), Offset(center.dx, y + 16), dash);
-      }
-    } else {
-      for (var x = street.rect.left + 26; x < street.rect.right - 26; x += 34) {
-        canvas.drawLine(Offset(x, center.dy), Offset(x + 16, center.dy), dash);
-      }
+  void _paintStreetNetwork(Canvas canvas) {
+    final path = Path();
+    for (final street in floor.streets) {
+      path.addRect(street.rect);
     }
+    canvas.drawPath(path, Paint()..color = _streetFill);
 
-    final label = street.label;
-    if (label != null && showStallLabels) {
-      final style = TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w800,
-        color: AppColors.deepBlue.withValues(alpha: 0.45),
-      );
-      if (street.isVertical) {
-        canvas.save();
-        canvas.translate(street.rect.center.dx, street.rect.top + 70);
-        canvas.rotate(math.pi / 2);
-        _drawText(canvas, label, Offset.zero, style, maxWidth: 160);
-        canvas.restore();
-      } else {
-        _drawText(
-          canvas,
-          label,
-          Offset(street.rect.left + 62, street.rect.center.dy),
-          style,
-          maxWidth: 160,
+    for (final street in floor.streets) {
+      final label = street.label;
+      if (label != null && (showStallLabels || selectedBlockId != null)) {
+        final style = TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+          color: AppColors.deepBlue.withValues(alpha: 0.4),
         );
+        if (street.isVertical) {
+          canvas.save();
+          canvas.translate(street.rect.center.dx, street.rect.top + 70);
+          canvas.rotate(math.pi / 2);
+          _drawText(canvas, label, Offset.zero, style, maxWidth: 160);
+          canvas.restore();
+        } else {
+          _drawText(
+            canvas,
+            label,
+            Offset(street.rect.left + 72, street.rect.center.dy),
+            style,
+            maxWidth: 180,
+          );
+        }
       }
     }
   }
 
   void _paintBlock(Canvas canvas, MarketBlock block) {
+    final complete = block.isComplete(paintedStoreIds);
+    final selected = block.id == selectedBlockId;
+    final matching = block.matchesUse(filterUse);
+    final dim = filterUse != null && !matching;
     final theme = block.theme.color;
+    final fill = complete ? theme.withValues(alpha: 0.88) : _blankFill;
+    final edge = complete
+        ? theme
+        : (selected ? AppColors.goldDeep : _blankEdge);
     final rrect = RRect.fromRectAndRadius(block.rect, const Radius.circular(16));
+
+    canvas.save();
+    if (dim) canvas.drawRRect(rrect, Paint()..color = const Color(0x00FFFFFF));
 
     canvas.drawRRect(
       rrect.shift(const Offset(0, 3)),
       Paint()..color = const Color(0x1A123A63),
     );
-    canvas.drawRRect(rrect, Paint()..color = _blockFill);
+    canvas.drawRRect(
+      rrect,
+      Paint()..color = fill.withValues(alpha: dim ? 0.28 : 1),
+    );
     canvas.drawRRect(
       rrect,
       Paint()
-        ..color = theme.withValues(alpha: 0.7)
+        ..color = (selected ? AppColors.gold : edge).withValues(
+          alpha: dim ? 0.35 : 1,
+        )
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.8,
+        ..strokeWidth = selected ? 4 : 2.2,
     );
 
-    final ribbon = RRect.fromRectAndCorners(
-      Rect.fromLTWH(block.rect.left, block.rect.top, block.rect.width, 32),
-      topLeft: const Radius.circular(16),
-      topRight: const Radius.circular(16),
-    );
-    canvas.drawRRect(ribbon, Paint()..color = theme);
-    _drawIcon(
+    final titleColor = complete
+        ? Colors.white
+        : AppColors.navy.withValues(alpha: dim ? 0.35 : 0.9);
+    _drawText(
       canvas,
-      block.theme.icon,
-      Offset(block.rect.left + 22, block.rect.top + 16),
-      16,
-      Colors.white,
+      block.code,
+      Offset(block.rect.center.dx, block.rect.top + 22),
+      TextStyle(
+        fontSize: selected || showStallLabels ? 20 : 26,
+        fontWeight: FontWeight.w900,
+        color: titleColor,
+        height: 1,
+      ),
+      maxWidth: block.rect.width - 12,
+      maxLines: 1,
     );
     _drawText(
       canvas,
       block.name,
-      Offset(block.rect.center.dx + 10, block.rect.top + 16),
-      const TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w900,
-        color: Colors.white,
+      Offset(block.rect.center.dx, block.rect.top + 44),
+      TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+        color: titleColor.withValues(alpha: complete ? 0.92 : 0.55),
         height: 1,
       ),
-      maxWidth: block.rect.width - 60,
+      maxWidth: block.rect.width - 16,
       maxLines: 1,
     );
 
-    for (final stall in block.stalls) {
-      _paintStall(canvas, stall);
+    final revealStalls = selected || showStallLabels;
+    if (revealStalls) {
+      for (final stall in block.stalls) {
+        _paintStall(canvas, stall, dim: dim && stall.use != filterUse);
+      }
+    } else if (complete) {
+      _drawIcon(
+        canvas,
+        block.theme.icon,
+        block.rect.center.translate(0, 16),
+        28,
+        Colors.white.withValues(alpha: dim ? 0.4 : 0.92),
+      );
     }
+
+    canvas.restore();
   }
 
-  void _paintStall(Canvas canvas, Stall stall) {
-    final color = stall.use.color;
-    final rrect = RRect.fromRectAndRadius(stall.rect, const Radius.circular(8));
-    final isDemo = stall.isDemoStore;
+  void _paintStall(Canvas canvas, Stall stall, {required bool dim}) {
+    final painted =
+        stall.storeId != null && paintedStoreIds.contains(stall.storeId);
     final isActive = stall.storeId != null && stall.storeId == activeStoreId;
-    final visited =
-        stall.storeId != null && visitedStoreIds.contains(stall.storeId);
+    final color = stall.use.color;
+    final fill = painted ? color.withValues(alpha: 0.94) : _blankFill;
+    final rrect = RRect.fromRectAndRadius(stall.rect, const Radius.circular(8));
 
     canvas.drawRRect(
       rrect,
-      Paint()..color = color.withValues(alpha: isDemo ? 0.92 : 0.28),
+      Paint()..color = fill.withValues(alpha: dim ? 0.28 : 1),
     );
     canvas.drawRRect(
       rrect,
       Paint()
-        ..color = isDemo
-            ? (isActive ? AppColors.gold : color)
-            : color.withValues(alpha: 0.55)
+        ..color = (isActive
+                ? AppColors.gold
+                : (painted ? color : _blankEdge))
+            .withValues(alpha: dim ? 0.4 : 1)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = isDemo ? 3 : 1.4,
+        ..strokeWidth = stall.isDemoStore ? 2.4 : 1.3,
     );
 
     if (isActive) {
@@ -264,31 +204,24 @@ class FloorPlanPainter extends CustomPainter {
       );
     }
 
-    if (showStallLabels) {
-      _drawText(
-        canvas,
-        stall.label,
-        stall.rect.center,
-        TextStyle(
-          fontSize: 11,
-          height: 1.12,
-          fontWeight: isDemo ? FontWeight.w900 : FontWeight.w700,
-          color: isDemo ? Colors.white : AppColors.ink.withValues(alpha: 0.78),
-        ),
-        maxWidth: stall.rect.width - 6,
-        maxLines: 2,
-      );
-    } else if (isDemo) {
-      _drawIcon(
-        canvas,
-        stall.use.icon,
-        stall.rect.center,
-        math.min(stall.rect.height * 0.5, 22),
-        Colors.white,
-      );
-    }
+    final labelColor = painted
+        ? Colors.white
+        : AppColors.ink.withValues(alpha: dim ? 0.35 : 0.78);
+    _drawText(
+      canvas,
+      stall.label,
+      stall.rect.center,
+      TextStyle(
+        fontSize: 11,
+        height: 1.12,
+        fontWeight: stall.isDemoStore ? FontWeight.w900 : FontWeight.w700,
+        color: labelColor,
+      ),
+      maxWidth: stall.rect.width - 6,
+      maxLines: 2,
+    );
 
-    if (visited) {
+    if (painted) {
       final badge = Offset(stall.rect.right - 9, stall.rect.top + 9);
       canvas.drawCircle(badge, 8, Paint()..color = AppColors.gold);
       _drawIcon(canvas, Icons.check_rounded, badge, 11, AppColors.navy);
@@ -361,6 +294,26 @@ class FloorPlanPainter extends CustomPainter {
     );
   }
 
+  void _paintMapLabel(Canvas canvas, MapLabel label) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label.text,
+        style: TextStyle(
+          fontSize: label.fontSize,
+          height: 1,
+          fontWeight: FontWeight.w900,
+          color: label.color,
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(
+      canvas,
+      Offset(label.at.dx - painter.width / 2, label.at.dy - painter.height / 2),
+    );
+  }
+
   void _drawText(
     Canvas canvas,
     String text,
@@ -412,6 +365,8 @@ class FloorPlanPainter extends CustomPainter {
     return old.floor != floor ||
         old.showStallLabels != showStallLabels ||
         old.activeStoreId != activeStoreId ||
-        !setEquals(old.visitedStoreIds, visitedStoreIds);
+        old.selectedBlockId != selectedBlockId ||
+        old.filterUse != filterUse ||
+        !setEquals(old.paintedStoreIds, paintedStoreIds);
   }
 }

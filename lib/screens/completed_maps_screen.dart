@@ -46,7 +46,7 @@ class _MarketRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = market.stores.length;
     final painted =
-        market.stores.where((s) => session.hasEverVisited(s.id)).length;
+        market.stores.where((s) => session.hasPainted(s.id)).length;
     final ready = total > 0;
     return Material(
       color: Colors.white,
@@ -140,7 +140,7 @@ class CompletedMarketMapCard extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      '시장을 고르면 방문한 가게 구역이 색으로 칠해집니다.',
+                      '리뷰를 남긴 가게가 색으로 칠해진 지도를 다시 봅니다.',
                       style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                     ),
                   ],
