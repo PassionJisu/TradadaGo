@@ -33,6 +33,31 @@ class SangjuIndoorMap {
         pad + mapSize.height - 70,
       );
 
+  /// 1층 가로 골목을 지그재그로 도는 시연 경로. 점포 칸이 아니라 복도 좌표다.
+  List<Offset> get demoWalkPath {
+    const local = [
+      Offset(1400, 1330),
+      Offset(1400, 1250),
+      Offset(495, 1250),
+      Offset(495, 1058),
+      Offset(2358, 1058),
+      Offset(2358, 875),
+      Offset(495, 875),
+      Offset(495, 694),
+      Offset(2358, 694),
+      Offset(2358, 510),
+      Offset(495, 510),
+      Offset(495, 327),
+      Offset(2358, 327),
+      Offset(2358, 510),
+      Offset(2032, 510),
+      Offset(2032, 1250),
+      Offset(1400, 1250),
+      Offset(1400, 1330),
+    ];
+    return [for (final point in local) Offset(point.dx + pad, point.dy + pad)];
+  }
+
   List<MarketFloor> get floors => const [
         MarketFloor(
           id: '1',

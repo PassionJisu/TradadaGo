@@ -38,7 +38,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
   SangjuIndoorMap? _data;
   IndoorCamera? _camera;
   IndoorStall? _nearby;
-  Offset _stick = Offset.zero;
+  IndoorPathWalker? _walker;
   int _floor = 1;
   StallUse? _filterUse;
   late final AnimationController _pulse;
@@ -73,6 +73,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
         pad: data.pad,
         focus: data.startFocus,
       );
+      _walker = IndoorPathWalker(data.demoWalkPath);
     });
     await StorePinImages.ensureLoaded();
     if (mounted) setState(() {});
@@ -88,19 +89,122 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
 
   void _onWalk(Duration _) {
     final camera = _camera;
-    if (camera == null || _stick.distance < 0.12 || _locateStall != null) {
+    final walker = _walker;
+    if (camera == null ||
+        walker == null ||
+        !walker.walking ||
+        _locateStall != null) {
       return;
     }
-    camera.walkInView(_stick, 9);
+    final next = walker.tick();
+    if (next != null) {
+      camera.focus = next;
+      camera.clampFocus();
+    }
     _syncNearby();
     setState(() {});
+  }
+
+  void _startDemoWalk() {
+    final data = _data;
+    final camera = _camera;
+    final walker = _walker;
+    if (data == null || camera == null || walker == null) return;
+    _locateTimer?.cancel();
+    _locateStall = null;
+    _homeFocus = null;
+    _homeScale = null;
+    _homeRotation = null;
+    walker.start();
+    camera.focus = walker.position;
+    camera.clampFocus();
+    _resumeAvatarPulse();
+    setState(() {
+      _floor = 1;
+      _filterUse = null;
+      _syncNearby();
+    });
+  }
+
+  void _pauseDemoWalk() {
+    _walker?.pause();
+    _pauseAvatarPulse();
+    if (mounted) setState(() {});
+  }
+
+  void _resumeDemoWalk() {
+    _walker?.resume();
+    _resumeAvatarPulse();
+    if (mounted) setState(() {});
+  }
+
+  void _stopDemoWalk() {
+    _walker?.stop();
+    _resumeAvatarPulse();
+    if (mounted) setState(() {});
+  }
+
+  void _pauseAvatarPulse() {
+    if (_pulse.isAnimating) _pulse.stop();
+  }
+
+  void _resumeAvatarPulse() {
+    if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+  }
+
+  Widget _demoWalkBar() {
+    final inSession = _walker?.running == true;
+    final paused = _walker?.paused == true;
+    return Row(
+      children: [
+        if (inSession) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _stopDemoWalk,
+              icon: const Icon(Icons.stop_rounded),
+              label: const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('시연 경로 정지'),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: !inSession
+                ? _startDemoWalk
+                : paused
+                    ? _resumeDemoWalk
+                    : _pauseDemoWalk,
+            icon: Icon(
+              !inSession
+                  ? Icons.directions_walk_rounded
+                  : paused
+                      ? Icons.play_arrow_rounded
+                      : Icons.pause_rounded,
+            ),
+            label: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                !inSession
+                    ? '골목 시연 걷기'
+                    : paused
+                        ? '이어서 걷기'
+                        : '일시정지',
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   void _syncNearby() {
     final camera = _camera;
     final data = _data;
     if (camera == null || data == null) return;
-    final hit = camera.hit(camera.focus, data.stallsOnFloor(_floor));
+    final hit = camera.nearest(camera.focus, data.stallsOnFloor(_floor));
     if (hit != null && _filterUse != null && hit.use != _filterUse) {
       _nearby = null;
       return;
@@ -141,7 +245,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
   void openNearbyStamp() {
     final stall = _nearby;
     if (stall == null) {
-      showAppNotice(context, '가게 칸이 켜질 때까지 걸어주세요.');
+      showAppNotice(context, '가게 칸이 켜질 때까지 골목을 걸어주세요.');
       return;
     }
     _openQr(stall);
@@ -269,11 +373,9 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                     ),
                     Positioned(
                       left: 16,
+                      right: 16,
                       bottom: bottomClearance,
-                      child: _Joystick(
-                        value: _stick,
-                        onChanged: (v) => setState(() => _stick = v),
-                      ),
+                      child: _demoWalkBar(),
                     ),
                   ],
                 );
@@ -342,6 +444,8 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
   }
 
   void _peekStall(IndoorStall stall, IndoorCamera camera, Size viewport) {
+    _walker?.stop();
+    _resumeAvatarPulse();
     _locateTimer?.cancel();
     _homeFocus ??= camera.focus;
     _homeScale ??= camera.scale;
@@ -451,7 +555,11 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                           ),
                         ),
                         Text(
-                          '내부 지도 · 점포 ${data.stalls.length}곳 · 캐릭터 고정',
+                          _walker?.paused == true
+                              ? '내부 지도 · 골목 시연 일시정지'
+                              : _walker?.running == true
+                                  ? '내부 지도 · 골목 시연 경로 이동 중'
+                                  : '내부 지도 · 점포 ${data.stalls.length}곳 · 캐릭터 고정',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -484,6 +592,8 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                 floors: data.floors,
                 selectedId: '$_floor',
                 onSelected: (id) => setState(() {
+                  _walker?.stop();
+                  _resumeAvatarPulse();
                   _floor = int.parse(id);
                   _filterUse = null;
                   _syncNearby();
@@ -687,65 +797,4 @@ class _RoundCtrl extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Joystick extends StatelessWidget {
-  const _Joystick({required this.value, required this.onChanged});
-
-  final Offset value;
-  final ValueChanged<Offset> onChanged;
-
-  static const size = 118.0;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: GestureDetector(
-        onPanStart: (d) => _update(d.localPosition),
-        onPanUpdate: (d) => _update(d.localPosition),
-        onPanEnd: (_) => onChanged(Offset.zero),
-        onPanCancel: () => onChanged(Offset.zero),
-        child: CustomPaint(painter: _JoystickPainter(value)),
-      ),
-    );
-  }
-
-  void _update(Offset local) {
-    final center = const Offset(size / 2, size / 2);
-    final delta = local - center;
-    final max = size / 2 - 18;
-    final clamped = delta.distance <= max ? delta : delta / delta.distance * max;
-    onChanged(clamped / max);
-  }
-}
-
-class _JoystickPainter extends CustomPainter {
-  const _JoystickPainter(this.value);
-
-  final Offset value;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(c, size.width / 2, Paint()..color = const Color(0xCCFFFFFF));
-    canvas.drawCircle(
-      c,
-      size.width / 2,
-      Paint()
-        ..color = const Color(0x330B3A6A)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    canvas.drawCircle(
-      c + value * (size.width / 2 - 18),
-      22,
-      Paint()..color = AppColors.navy,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _JoystickPainter oldDelegate) =>
-      oldDelegate.value != value;
 }

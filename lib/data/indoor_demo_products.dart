@@ -2,12 +2,20 @@ import '../config/assets.dart';
 import '../map/market_blueprint.dart';
 import '../models/product.dart';
 
+/// 시장 데모 마감할인 핀은 필터 가능한 점포에서 약 1/4만 뺀다.
+bool indoorDemoHasDiscount(String stallId) {
+  final match = RegExp(r'(\d+)$').firstMatch(stallId);
+  if (match == null) return true;
+  return int.parse(match.group(1)!) % 4 != 0;
+}
+
 List<Product> indoorDemoProducts({
   required String stallId,
   required String stallName,
   required StallUse use,
 }) {
   if (!use.isFilterable) return const [];
+  if (!indoorDemoHasDiscount(stallId)) return const [];
 
   Product pack({
     required String suffix,

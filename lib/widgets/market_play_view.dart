@@ -89,13 +89,19 @@ class MarketPlayViewState extends State<MarketPlayView>
 
   void _onLocation() {
     if (!mounted) return;
+    if (_loc.demoPaused) {
+      if (_pulse.isAnimating) _pulse.stop();
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    }
     final blueprint = _blueprint;
     final floor = _floor;
     if (blueprint != null &&
         floor != null &&
         floor.isGpsFloor &&
         _selectedWingId == null &&
-        (_followUser || _loc.demoWalking)) {
+        (_followUser || _loc.demoWalking) &&
+        !_loc.demoPaused) {
       _focusOn(_avatarCanvas(blueprint), scale: 1.18);
     }
     setState(() {});
@@ -418,29 +424,7 @@ class MarketPlayViewState extends State<MarketPlayView>
                 left: 16,
                 right: 16,
                 bottom: 216,
-                child: FilledButton.icon(
-                  onPressed: _loc.demoWalking
-                      ? _loc.stopDemoWalk
-                      : () {
-                          if (widget.market.id ==
-                              GwangjuMarkets.yangdong.id) {
-                            setState(() {
-                              _followUser = true;
-                              _selectedWingId = null;
-                              if (!floor.isGpsFloor) {
-                                _floorId = blueprint.gpsFloor.id;
-                              }
-                            });
-                            _loc.startYangdongDemoWalk();
-                          }
-                        },
-                  icon: Icon(
-                    _loc.demoWalking
-                        ? Icons.stop_rounded
-                        : Icons.directions_walk_rounded,
-                  ),
-                  label: Text(_loc.demoWalking ? '시연 경로 정지' : '골목 시연 걷기'),
-                ),
+                child: _demoWalkBar(floor, blueprint),
               ),
               Positioned(
                 left: 16,
@@ -456,6 +440,66 @@ class MarketPlayViewState extends State<MarketPlayView>
           ),
         );
       },
+    );
+  }
+
+  Widget _demoWalkBar(MarketFloor floor, MarketBlueprint blueprint) {
+    final inSession = _loc.demoWalking;
+    final paused = _loc.demoPaused;
+    return Row(
+      children: [
+        if (inSession) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _loc.stopDemoWalk,
+              icon: const Icon(Icons.stop_rounded),
+              label: const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('시연 경로 정지'),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: !inSession
+                ? () {
+                    if (widget.market.id != GwangjuMarkets.yangdong.id) {
+                      return;
+                    }
+                    setState(() {
+                      _followUser = true;
+                      _selectedWingId = null;
+                      if (!floor.isGpsFloor) {
+                        _floorId = blueprint.gpsFloor.id;
+                      }
+                    });
+                    _loc.startYangdongDemoWalk();
+                  }
+                : paused
+                    ? _loc.resumeDemoWalk
+                    : _loc.pauseDemoWalk,
+            icon: Icon(
+              !inSession
+                  ? Icons.directions_walk_rounded
+                  : paused
+                      ? Icons.play_arrow_rounded
+                      : Icons.pause_rounded,
+            ),
+            label: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                !inSession
+                    ? '골목 시연 걷기'
+                    : paused
+                        ? '이어서 걷기'
+                        : '일시정지',
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

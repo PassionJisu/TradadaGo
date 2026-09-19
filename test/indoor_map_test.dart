@@ -25,8 +25,8 @@ void main() {
     camera.scale = 0.01;
     camera.clampScale(view);
     expect(camera.scale, camera.minScale(view));
-    expect(camera.scale, IndoorCamera.labelMinScale);
-    expect(camera.minScale(view), greaterThan(400 / 2800));
+    expect(camera.minScale(view), closeTo(400 / 2800, 0.0001));
+    expect(camera.scale, lessThan(IndoorCamera.labelMinScale));
 
     camera.scale = 99;
     camera.clampScale(view);
@@ -54,6 +54,58 @@ void main() {
     );
     expect(camera.hit(const Offset(20, 20), [stall])?.id, 'sj-test');
     expect(camera.hit(const Offset(90, 90), [stall]), isNull);
+  });
+
+  test('IndoorCamera nearest lights a stall from the alley', () {
+    final path = Path()..addRect(const Rect.fromLTWH(10, 10, 40, 40));
+    final stall = IndoorStall(
+      id: 'sj-alley',
+      name: '골목옆점포',
+      floor: 1,
+      path: path,
+      bounds: path.getBounds(),
+    );
+    final camera = IndoorCamera(
+      mapSize: const Size(100, 100),
+      pad: 0,
+      focus: const Offset(30, 62),
+    );
+    expect(camera.hit(camera.focus, [stall]), isNull);
+    expect(camera.nearest(camera.focus, [stall])?.id, 'sj-alley');
+    expect(camera.nearest(const Offset(200, 200), [stall]), isNull);
+  });
+
+  test('IndoorPathWalker follows a path then stops', () {
+    const route = [Offset(0, 0), Offset(10, 0), Offset(10, 10)];
+    final walker = IndoorPathWalker(route);
+    walker.start();
+    expect(walker.position, Offset.zero);
+    Offset? last;
+    var steps = 0;
+    while (walker.running && steps < 1000) {
+      last = walker.tick(pixels: 3);
+      steps += 1;
+    }
+    expect(walker.running, isFalse);
+    expect(last, route.last);
+    expect(steps, lessThan(20));
+  });
+
+  test('IndoorPathWalker pause keeps progress until resume', () {
+    const route = [Offset(0, 0), Offset(100, 0)];
+    final walker = IndoorPathWalker(route);
+    walker.start();
+    walker.tick(pixels: 20);
+    final pausedAt = walker.position;
+    walker.pause();
+    expect(walker.paused, isTrue);
+    expect(walker.walking, isFalse);
+    expect(walker.tick(pixels: 20), isNull);
+    expect(walker.position, pausedAt);
+    walker.resume();
+    expect(walker.walking, isTrue);
+    walker.tick(pixels: 20);
+    expect(walker.position.dx, greaterThan(pausedAt.dx));
   });
 
   test('indoor stall QR does not require a map pin', () {
@@ -134,9 +186,18 @@ void main() {
     expect(data.mapSize, const Size(2800, 1400));
     expect(data.startFocus.dx, closeTo(data.pad + data.mapSize.width / 2, 0.1));
     expect(data.startFocus.dy, closeTo(data.pad + data.mapSize.height - 70, 0.1));
+    expect(data.demoWalkPath.first, data.startFocus);
+    expect(data.demoWalkPath.last, data.startFocus);
+    expect(data.demoWalkPath.length, greaterThan(8));
     expect(data.stalls.any((s) => s.name == '동성신발 백화점'), isTrue);
     expect(data.stalls.any((s) => s.name == '새마을종묘사'), isTrue);
     expect(data.stalls.any((s) => s.name == '상인교육장' && s.floor == 2), isTrue);
+    final pinCandidates = data.stalls.where((s) {
+      return s.use.isFilterable && s.use != StallUse.service;
+    }).length;
+    final discounted = data.stalls.where((s) => s.hasDiscountProducts).length;
+    expect(discounted, lessThan(pinCandidates));
+    expect(discounted, closeTo(pinCandidates * 0.75, 18));
     final floor2Bounds = data.stalls
         .where((s) => s.floor == 2)
         .map((s) => s.bounds)
@@ -194,6 +255,24 @@ void main() {
     expect(find.text('카테고리 선택'), findsOneWidget);
     expect(find.text('1층 선택'), findsOneWidget);
     expect(find.text('가게 정보 보기'), findsOneWidget);
+    expect(find.text('골목 시연 걷기'), findsOneWidget);
+
+    await tester.tap(find.text('골목 시연 걷기'));
+    await tester.pump();
+    expect(find.text('시연 경로 정지'), findsOneWidget);
+    expect(find.text('일시정지'), findsOneWidget);
+    expect(find.textContaining('골목 시연 경로 이동 중'), findsOneWidget);
+    await tester.tap(find.text('일시정지'));
+    await tester.pump();
+    expect(find.text('이어서 걷기'), findsOneWidget);
+    expect(find.textContaining('골목 시연 일시정지'), findsOneWidget);
+    await tester.tap(find.text('이어서 걷기'));
+    await tester.pump();
+    expect(find.text('일시정지'), findsOneWidget);
+    expect(find.textContaining('골목 시연 경로 이동 중'), findsOneWidget);
+    await tester.tap(find.text('시연 경로 정지'));
+    await tester.pump();
+    expect(find.text('골목 시연 걷기'), findsOneWidget);
 
     final start = tester.widget<Image>(find.byKey(const Key('indoor-avatar')));
     await tester.tap(find.byIcon(Icons.add));
