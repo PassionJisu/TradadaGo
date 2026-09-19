@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 import '../widgets/google_location_dot.dart';
 import '../widgets/market_play_view.dart';
+import 'sangju_indoor_map_screen.dart';
 
 class HomeMapScreen extends StatefulWidget {
   const HomeMapScreen({super.key});
@@ -200,6 +201,23 @@ class HomeMapScreenState extends State<HomeMapScreen> {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: _HintChip('광주 전통시장 핀만 표시됩니다. 양동시장을 눌러 입장하세요.'),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ActionChip(
+                    avatar: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text('시장 내부 지도 · 상주종합시장'),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SangjuIndoorMapScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ],
           ),
