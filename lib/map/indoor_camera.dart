@@ -63,11 +63,6 @@ class IndoorCamera {
     return Offset(d.dx * c - d.dy * s, d.dx * s + d.dy * c);
   }
 
-  void panByScreenDelta(Offset delta) {
-    focus -= screenVectorToWorld(delta);
-    clampFocus();
-  }
-
   void walkInView(Offset viewDir, double worldPixels) {
     final len = viewDir.distance;
     if (len < 0.001) return;

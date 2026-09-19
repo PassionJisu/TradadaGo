@@ -85,14 +85,10 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
 
   void _onScaleUpdate(ScaleUpdateDetails details, Size viewport) {
     final camera = _camera;
-    if (camera == null) return;
-    if (details.pointerCount >= 2) {
-      camera.scale = _startScale * details.scale;
-      camera.rotation = _startRotation + details.rotation;
-      camera.clampScale(viewport);
-    } else {
-      camera.panByScreenDelta(details.focalPointDelta);
-    }
+    if (camera == null || details.pointerCount < 2) return;
+    camera.scale = _startScale * details.scale;
+    camera.rotation = _startRotation + details.rotation;
+    camera.clampScale(viewport);
     _syncNearby();
     setState(() {});
   }
