@@ -14,13 +14,22 @@ class IndoorCamera {
   final Size mapSize;
   final double pad;
   Offset focus;
-  double scale = 0.45;
+  double scale = referenceScale;
   double rotation = 0;
+
+  static const referenceScale = 0.45;
+  static const avatarBaseSize = Size(22, 36);
+  static const avatarShadowSize = Size(9, 3);
 
   Size get worldSize => Size(mapSize.width + pad * 2, mapSize.height + pad * 2);
 
   Offset characterScreen(Size viewport) =>
       Offset(viewport.width / 2, viewport.height * 0.62);
+
+  /// Avatar is a fixed size on the map, so zoom in/out changes on-screen size.
+  Size avatarScreenSize() => avatarBaseSize * (scale / referenceScale);
+
+  Size avatarShadowScreenSize() => avatarShadowSize * (scale / referenceScale);
 
   double minScale(Size viewport) {
     return math.min(

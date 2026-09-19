@@ -200,7 +200,7 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                         ),
                       ),
                     ),
-                    _avatar(origin),
+                    _avatar(origin, camera),
                     SafeArea(child: _hud(data, camera, viewport)),
                     Positioned(
                       left: 16,
@@ -217,16 +217,19 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     );
   }
 
-  Widget _avatar(Offset origin) {
+  Widget _avatar(Offset origin, IndoorCamera camera) {
+    final size = camera.avatarScreenSize();
+    final shadow = camera.avatarShadowScreenSize();
+    final bounce = 3 * camera.scale / IndoorCamera.referenceScale;
     return Positioned(
-      left: origin.dx - 36,
-      top: origin.dy - 108,
+      left: origin.dx - size.width / 2,
+      top: origin.dy - size.height + shadow.height,
       child: IgnorePointer(
         child: AnimatedBuilder(
           animation: _pulse,
           builder: (context, child) {
             return Transform.translate(
-              offset: Offset(0, -3 * _pulse.value),
+              offset: Offset(0, -bounce * _pulse.value),
               child: child,
             );
           },
@@ -234,14 +237,15 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
             children: [
               Image.asset(
                 AppAssets.playAvatar,
-                width: 72,
-                height: 118,
+                key: const Key('indoor-avatar'),
+                width: size.width,
+                height: size.height,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
               ),
               Container(
-                width: 28,
-                height: 10,
+                width: shadow.width,
+                height: shadow.height,
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),

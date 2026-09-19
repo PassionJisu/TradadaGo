@@ -50,6 +50,22 @@ void main() {
     expect(camera.hit(const Offset(90, 90), [stall]), isNull);
   });
 
+  test('avatar screen size follows map zoom', () {
+    final camera = IndoorCamera(
+      mapSize: const Size(2800, 1400),
+      pad: 1200,
+      focus: const Offset(2600, 1900),
+    );
+    camera.scale = IndoorCamera.referenceScale;
+    expect(camera.avatarScreenSize(), IndoorCamera.avatarBaseSize);
+
+    camera.scale = IndoorCamera.referenceScale * 2;
+    expect(camera.avatarScreenSize(), IndoorCamera.avatarBaseSize * 2);
+
+    camera.scale = IndoorCamera.referenceScale / 2;
+    expect(camera.avatarScreenSize(), IndoorCamera.avatarBaseSize * 0.5);
+  });
+
   testWidgets('Sangju indoor map shows every published stall on a fixed camera', (
     tester,
   ) async {
@@ -78,5 +94,18 @@ void main() {
     expect(find.text('상주종합시장'), findsOneWidget);
     expect(find.textContaining('점포 186곳'), findsOneWidget);
     expect(find.textContaining('캐릭터 고정'), findsOneWidget);
+
+    final start = tester.widget<Image>(find.byKey(const Key('indoor-avatar')));
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pump();
+    final zoomedIn = tester.widget<Image>(find.byKey(const Key('indoor-avatar')));
+    expect(zoomedIn.width!, greaterThan(start.width!));
+
+    await tester.tap(find.byIcon(Icons.remove));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.remove));
+    await tester.pump();
+    final zoomedOut = tester.widget<Image>(find.byKey(const Key('indoor-avatar')));
+    expect(zoomedOut.width!, lessThan(start.width!));
   });
 }
