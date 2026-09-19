@@ -5,6 +5,8 @@ import 'package:foodridge/map/indoor_camera.dart';
 import 'package:foodridge/map/sangju_indoor_painter.dart';
 import 'package:foodridge/models/indoor_stall.dart';
 import 'package:foodridge/screens/sangju_indoor_map_screen.dart';
+import 'package:foodridge/state/app_session.dart';
+import 'package:foodridge/widgets/completed_indoor_plan_view.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void main() {
@@ -50,6 +52,22 @@ void main() {
     );
     expect(camera.hit(const Offset(20, 20), [stall])?.id, 'sj-test');
     expect(camera.hit(const Offset(90, 90), [stall]), isNull);
+  });
+
+  test('indoor stall QR does not require a map pin', () {
+    final path = Path()..addRect(const Rect.fromLTWH(10, 10, 40, 40));
+    final stall = IndoorStall(
+      id: 'sj-test',
+      name: '테스트점포',
+      floor: 1,
+      path: path,
+      bounds: path.getBounds(),
+    );
+    final store = stall.asStore();
+    expect(store.requireGps, isFalse);
+    expect(store.qrPayload, 'TRADADAGO:sj-test');
+    expect(store.products, isNotEmpty);
+    expect(store.products.first.name, contains('테스트점포'));
   });
 
   test('avatar screen size follows map zoom', () {
@@ -141,5 +159,55 @@ void main() {
     await tester.pump();
     final zoomedOut = tester.widget<Image>(find.byKey(const Key('indoor-avatar')));
     expect(zoomedOut.width!, lessThan(start.width!));
+  });
+
+  testWidgets('indoor stall sheet offers QR without a map pin', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: IndoorStallSheet(
+            stall: IndoorStall(
+              id: 'sj-sheet',
+              name: '동성신발 백화점',
+              floor: 1,
+              path: Path()..addRect(const Rect.fromLTWH(0, 0, 10, 10)),
+              bounds: const Rect.fromLTWH(0, 0, 10, 10),
+            ),
+            verified: false,
+            onScanQr: () {},
+            onOpenStore: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('QR 인증하기'), findsOneWidget);
+    expect(find.text('가게·상품 자세히 보기'), findsOneWidget);
+    expect(find.textContaining('마감할인'), findsWidgets);
+  });
+
+  testWidgets('completed indoor plan fits the market floor', (tester) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            children: [
+              CompletedIndoorPlanView(session: AppSession.instance),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+    expect(find.textContaining('0/186곳'), findsOneWidget);
+    expect(find.text('1층 선택'), findsOneWidget);
+    expect(find.byType(InteractiveViewer), findsOneWidget);
   });
 }

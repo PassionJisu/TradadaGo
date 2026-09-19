@@ -97,8 +97,23 @@ class AppSession extends ChangeNotifier {
   bool canWriteReview(String storeId) =>
       hasQrVerified(storeId) || hasPainted(storeId);
 
-  void markQrVerified(String storeId) {
-    qrVerifiedStoreIds.add(storeId);
+  void markQrVerified(Store store) {
+    qrVerifiedStoreIds.add(store.id);
+    final alreadyListed = reservations.any((item) => item.storeId == store.id);
+    if (!alreadyListed) {
+      reservations.insert(
+        0,
+        Reservation(
+          id: 'qr-${DateTime.now().microsecondsSinceEpoch}',
+          storeId: store.id,
+          storeName: store.name,
+          productName: '현장 방문',
+          price: 0,
+          createdAt: DateTime.now(),
+          kind: UsageKind.qrVisit,
+        ),
+      );
+    }
     notifyListeners();
   }
 

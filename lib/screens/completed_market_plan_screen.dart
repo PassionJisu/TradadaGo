@@ -28,7 +28,7 @@ class CompletedMarketPlanScreen extends StatelessWidget {
             children: [
               Text(
                 market.id == 'malbau'
-                    ? 'QR 인증한 가게만 색이 칠해집니다. 예약내역에서 리뷰를 남길 수 있습니다.'
+                    ? 'QR 인증한 가게만 색이 칠해집니다. 핀치로 확대하면 점포가 보입니다. 이용내역에서 리뷰를 남길 수 있습니다.'
                     : '내가 리뷰를 남긴 가게만 색이 칠해집니다. 한 동의 가게를 모두 칠하면 동 색도 돌아옵니다.',
                 style: const TextStyle(
                   fontSize: 13,

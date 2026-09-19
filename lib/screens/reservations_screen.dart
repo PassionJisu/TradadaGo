@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../data/gwangju_markets.dart';
+import '../models/reservation.dart';
+import '../models/store.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
 import 'write_review_screen.dart';
@@ -21,7 +23,7 @@ class ReservationsScreen extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
                 child: Text(
-                  '예약내역',
+                  '이용내역',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
@@ -33,7 +35,7 @@ class ReservationsScreen extends StatelessWidget {
                 const Expanded(
                   child: Center(
                     child: Text(
-                      '아직 예약한 마감할인 상품이 없습니다.\n지도에서 가게를 열어 예약해보세요.',
+                      '아직 이용 내역이 없습니다.\n가게 앞에서 QR을 찍거나 마감할인 상품을 예약해보세요.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Color(0xFF6B7280)),
                     ),
@@ -47,11 +49,10 @@ class ReservationsScreen extends StatelessWidget {
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, i) {
                       final r = items[i];
-                      final store = GwangjuMarkets.storeById(r.storeId);
-                      final canReview = store != null &&
+                      final store = _storeFor(r);
+                      final canReview =
                           AppSession.instance.canWriteReview(store.id);
-                      final reviewed = store != null &&
-                          AppSession.instance.hasPainted(store.id);
+                      final reviewed = AppSession.instance.hasPainted(store.id);
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -72,12 +73,27 @@ class ReservationsScreen extends StatelessWidget {
                             Text(r.productName),
                             const SizedBox(height: 6),
                             Text(
-                              '${_won(r.price)} · 픽업 예약',
+                              r.isQrVisit
+                                  ? 'QR 방문 인증'
+                                  : '${_won(r.price)} · 픽업 예약',
                               style: const TextStyle(
                                 color: AppColors.pinRed,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
+                            if (!r.isQrVisit &&
+                                AppSession.instance.hasQrVerified(r.storeId))
+                              const Padding(
+                                padding: EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'QR 인증됨',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.teal,
+                                  ),
+                                ),
+                              ),
                             const SizedBox(height: 8),
                             if (canReview)
                               Align(
@@ -117,6 +133,19 @@ class ReservationsScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  static Store _storeFor(Reservation item) {
+    return GwangjuMarkets.storeById(item.storeId) ??
+        Store(
+          id: item.storeId,
+          marketId: item.storeId.startsWith('sj-') ? 'malbau' : 'visit',
+          name: item.storeName,
+          category: '방문',
+          position: GwangjuMarkets.cityCenter,
+          products: const [],
+          requireGps: false,
+        );
   }
 
   static String _won(int v) {

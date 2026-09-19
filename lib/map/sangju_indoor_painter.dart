@@ -19,6 +19,7 @@ class SangjuIndoorPainter extends CustomPainter {
     this.floorFilter,
     this.useFilter,
     this.visitedIds = const {},
+    this.clipToMarket = false,
   });
 
   final List<IndoorStall> stalls;
@@ -30,17 +31,27 @@ class SangjuIndoorPainter extends CustomPainter {
   final int? floorFilter;
   final StallUse? useFilter;
   final Set<String> visitedIds;
+  final bool clipToMarket;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.transform(matrix.storage);
+    if (clipToMarket) {
+      canvas.clipRect(Rect.fromLTWH(pad, pad, mapSize.width, mapSize.height));
+    }
 
     final world = Size(mapSize.width + pad * 2, mapSize.height + pad * 2);
-    final grass = Paint()..color = const Color(0xFF8FCB5A);
-    canvas.drawRect(Offset.zero & world, grass);
-
-    _drawGroundPattern(canvas, world);
+    if (!clipToMarket) {
+      final grass = Paint()..color = const Color(0xFF8FCB5A);
+      canvas.drawRect(Offset.zero & world, grass);
+      _drawGroundPattern(canvas, world);
+    } else {
+      canvas.drawRect(
+        Rect.fromLTWH(pad, pad, mapSize.width, mapSize.height),
+        Paint()..color = const Color(0xFFD9D3C6),
+      );
+    }
 
     final market = Rect.fromLTWH(pad, pad, mapSize.width, mapSize.height);
     final plaza = market.inflate(90);
@@ -217,6 +228,7 @@ class SangjuIndoorPainter extends CustomPainter {
         oldDelegate.floorFilter != floorFilter ||
         oldDelegate.useFilter != useFilter ||
         oldDelegate.stalls != stalls ||
-        !setEquals(oldDelegate.visitedIds, visitedIds);
+        !setEquals(oldDelegate.visitedIds, visitedIds) ||
+        oldDelegate.clipToMarket != clipToMarket;
   }
 }

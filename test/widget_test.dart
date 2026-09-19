@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:foodridge/data/gwangju_markets.dart';
 import 'package:foodridge/screens/community_screen.dart';
 import 'package:foodridge/screens/login_screen.dart';
 import 'package:foodridge/screens/my_page_screen.dart';
+import 'package:foodridge/screens/reservations_screen.dart';
+import 'package:foodridge/state/app_session.dart';
 import 'package:foodridge/widgets/tradada_bottom_nav.dart';
 
 void main() {
@@ -26,6 +29,8 @@ void main() {
       ),
     );
     expect(find.text('커뮤니티'), findsOneWidget);
+    expect(find.text('이용내역'), findsOneWidget);
+    expect(find.text('예약내역'), findsNothing);
     expect(find.text('리뷰 & 추천'), findsNothing);
   });
 
@@ -86,6 +91,18 @@ void main() {
     await tester.tap(find.text('양동시장'));
     await tester.pumpAndSettle();
     expect(find.text('양동시장'), findsWidgets);
+  });
+
+  testWidgets('QR visit appears in usage history with review', (tester) async {
+    final store = GwangjuMarkets.yangdong.stores.first;
+    AppSession.instance.markQrVerified(store);
+
+    await tester.pumpWidget(const MaterialApp(home: ReservationsScreen()));
+    expect(find.text('이용내역'), findsOneWidget);
+    expect(find.text(store.name), findsOneWidget);
+    expect(find.text('QR 방문 인증'), findsWidgets);
+    expect(find.text('포토 리뷰 쓰기'), findsOneWidget);
+    expect(find.textContaining('아직 이용 내역이 없습니다'), findsNothing);
   });
 }
 

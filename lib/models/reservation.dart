@@ -1,3 +1,5 @@
+enum UsageKind { pickup, qrVisit }
+
 class Reservation {
   const Reservation({
     required this.id,
@@ -6,6 +8,7 @@ class Reservation {
     required this.productName,
     required this.price,
     required this.createdAt,
+    this.kind = UsageKind.pickup,
   });
 
   final String id;
@@ -14,4 +17,7 @@ class Reservation {
   final String productName;
   final int price;
   final DateTime createdAt;
+  final UsageKind kind;
+
+  bool get isQrVisit => kind == UsageKind.qrVisit;
 }

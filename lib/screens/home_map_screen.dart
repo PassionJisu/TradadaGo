@@ -24,6 +24,7 @@ class HomeMapScreenState extends State<HomeMapScreen> {
   bool _mapReady = false;
   NaverMapController? _map;
   final _playKey = GlobalKey<MarketPlayViewState>();
+  final _indoorKey = GlobalKey<SangjuIndoorMapScreenState>();
 
   LocationSession get _loc => LocationSession.instance;
 
@@ -43,6 +44,10 @@ class HomeMapScreenState extends State<HomeMapScreen> {
   void openStampFlow() {
     if (_focused == null) {
       showAppNotice(context, '시장 핀을 눌러 조감도로 들어가세요.');
+      return;
+    }
+    if (_focused!.id == GwangjuMarkets.malbau.id) {
+      _indoorKey.currentState?.openNearbyStamp();
       return;
     }
     _playKey.currentState?.openNearbyStamp();
@@ -166,7 +171,7 @@ class HomeMapScreenState extends State<HomeMapScreen> {
           ? _cityMap()
           : _focused!.id == GwangjuMarkets.malbau.id
               ? SangjuIndoorMapScreen(
-                  key: const ValueKey('indoor-demo'),
+                  key: _indoorKey,
                   onBack: _backToCity,
                 )
               : _playMap(),

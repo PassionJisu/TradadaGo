@@ -22,6 +22,7 @@ class StoreDetailScreen extends StatelessWidget {
       listenable: AppSession.instance,
       builder: (context, _) {
         final nearby = LocationSession.instance.isNear(store.position);
+        final canScan = !store.requireGps || nearby;
         final stampedToday =
             AppSession.instance.hasVisitStampToday(store.id);
         final painted = AppSession.instance.hasPainted(store.id);
@@ -69,10 +70,10 @@ class StoreDetailScreen extends StatelessWidget {
                     Text(
                       painted
                           ? '방문 완료'
-                          : (nearby ? 'QR 인증 가능' : '접근 필요'),
+                          : (canScan ? 'QR 인증 가능' : '접근 필요'),
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        color: painted || nearby
+                        color: painted || canScan
                             ? AppColors.teal
                             : const Color(0xFF9AA3AF),
                       ),
@@ -98,19 +99,21 @@ class StoreDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
-            '마감할인 상품',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.navy,
+          if (store.products.isNotEmpty) ...[
+            const Text(
+              '마감할인 상품',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          ...store.products.map((p) => _ProductCard(store: store, product: p)),
-          const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            ...store.products.map((p) => _ProductCard(store: store, product: p)),
+            const SizedBox(height: 16),
+          ],
           FilledButton.icon(
-            onPressed: nearby
+            onPressed: canScan
                 ? () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -120,7 +123,7 @@ class StoreDetailScreen extends StatelessWidget {
                   }
                 : null,
             icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: Text(nearby ? 'QR 인증하기' : '가게 앞에서만 QR 인증이 됩니다'),
+            label: Text(canScan ? 'QR 인증하기' : '가게 앞에서만 QR 인증이 됩니다'),
           ),
           const SizedBox(height: 10),
           if (canReview)

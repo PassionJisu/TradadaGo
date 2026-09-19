@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -18,13 +20,18 @@ class CompletedIndoorPlanView extends StatefulWidget {
 }
 
 class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
+  final _controller = TransformationController();
   SangjuIndoorMap? _data;
   int _floor = 1;
   StallUse? _filterUse;
+  Size _viewport = Size.zero;
 
   @override
   void initState() {
     super.initState();
+    _controller.addListener(() {
+      if (mounted) setState(() {});
+    });
     _load();
   }
 
@@ -32,6 +39,32 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
     final data = await SangjuIndoorMap.load();
     if (!mounted) return;
     setState(() => _data = data);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double get _scale => _controller.value.getMaxScaleOnAxis();
+
+  void _fit(Size viewport) {
+    final data = _data;
+    if (data == null || viewport.isEmpty) return;
+    final map = data.mapSize;
+    final scale = math.min(
+      (viewport.width - 12) / map.width,
+      (viewport.height - 12) / map.height,
+    );
+    _controller.value = Matrix4.identity()
+      ..translateByDouble(
+        (viewport.width - map.width * scale) / 2,
+        (viewport.height - map.height * scale) / 2,
+        0,
+        1,
+      )
+      ..scaleByDouble(scale, scale, scale, 1);
   }
 
   @override
@@ -46,6 +79,12 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
 
     final visited = widget.session.qrVerifiedStoreIds;
     final painted = data.stalls.where((s) => visited.contains(s.id)).length;
+    final fit = _viewport.isEmpty
+        ? 0.2
+        : math.min(
+            (_viewport.width - 12) / data.mapSize.width,
+            (_viewport.height - 12) / data.mapSize.height,
+          );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -77,29 +116,51 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
         ),
         const SizedBox(height: 10),
         AspectRatio(
-          aspectRatio: 2,
+          aspectRatio: 5 / 3,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: ColoredBox(
-              color: const Color(0xFFF7F4EC),
-              child: InteractiveViewer(
-                minScale: 0.35,
-                maxScale: 4.5,
-                child: CustomPaint(
-                  size: data.mapSize,
-                  painter: SangjuIndoorPainter(
-                    stalls: data.stalls,
-                    mapSize: data.mapSize,
-                    pad: data.pad,
-                    scale: 1.1,
-                    matrix: Matrix4.identity()
-                      ..translateByDouble(-data.pad, -data.pad, 0, 1),
-                    floorFilter: _floor,
-                    useFilter: _filterUse,
-                    visitedIds: Set<String>.of(visited),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final viewport = Size(
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                );
+                if (viewport != _viewport && viewport.width > 0) {
+                  _viewport = viewport;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _fit(viewport);
+                  });
+                }
+                return ColoredBox(
+                  color: const Color(0xFFF7F4EC),
+                  child: InteractiveViewer(
+                    transformationController: _controller,
+                    constrained: false,
+                    minScale: math.max(0.08, fit * 0.92),
+                    maxScale: 6,
+                    boundaryMargin: const EdgeInsets.all(80),
+                    child: SizedBox(
+                      width: data.mapSize.width,
+                      height: data.mapSize.height,
+                      child: CustomPaint(
+                        size: data.mapSize,
+                        painter: SangjuIndoorPainter(
+                          stalls: data.stalls,
+                          mapSize: data.mapSize,
+                          pad: data.pad,
+                          scale: _scale,
+                          matrix: Matrix4.identity()
+                            ..translateByDouble(-data.pad, -data.pad, 0, 1),
+                          floorFilter: _floor,
+                          useFilter: _filterUse,
+                          visitedIds: Set<String>.of(visited),
+                          clipToMarket: true,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ),

@@ -11,8 +11,11 @@ import '../map/indoor_camera.dart';
 import '../map/market_blueprint.dart';
 import '../map/sangju_indoor_painter.dart';
 import '../models/indoor_stall.dart';
+import 'qr_scan_screen.dart';
+import 'store_detail_screen.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
+import '../util/app_notice.dart';
 import '../widgets/market_map_controls.dart';
 
 class SangjuIndoorMapScreen extends StatefulWidget {
@@ -26,10 +29,10 @@ class SangjuIndoorMapScreen extends StatefulWidget {
   final VoidCallback? onBack;
 
   @override
-  State<SangjuIndoorMapScreen> createState() => _SangjuIndoorMapScreenState();
+  SangjuIndoorMapScreenState createState() => SangjuIndoorMapScreenState();
 }
 
-class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
+class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     with TickerProviderStateMixin {
   SangjuIndoorMap? _data;
   IndoorCamera? _camera;
@@ -137,7 +140,25 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     _showStall(stall);
   }
 
+  void openNearbyStamp() {
+    final stall = _nearby;
+    if (stall == null) {
+      showAppNotice(context, '가게 칸이 켜질 때까지 걸어주세요.');
+      return;
+    }
+    _openQr(stall);
+  }
+
+  void _openQr(IndoorStall stall) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => QrScanScreen(store: stall.asStore()),
+      ),
+    );
+  }
+
   void _showStall(IndoorStall stall) {
+    final verified = AppSession.instance.hasQrVerified(stall.id);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -145,29 +166,21 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                stall.name,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.navy,
-                ),
+        return IndoorStallSheet(
+          stall: stall,
+          verified: verified,
+          onScanQr: () {
+            Navigator.pop(ctx);
+            _openQr(stall);
+          },
+          onOpenStore: () {
+            Navigator.pop(ctx);
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => StoreDetailScreen(store: stall.asStore()),
               ),
-              const SizedBox(height: 6),
-              Text('${stall.floor}층 · ${widget.title} 내부 지도'),
-              const SizedBox(height: 10),
-              const Text(
-                '점포 위치는 공식 배치도의 영역 좌표를 그대로 옮겼습니다.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -564,6 +577,94 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
         ],
       ),
     );
+  }
+}
+
+class IndoorStallSheet extends StatelessWidget {
+  const IndoorStallSheet({
+    super.key,
+    required this.stall,
+    required this.verified,
+    required this.onScanQr,
+    this.onOpenStore,
+  });
+
+  final IndoorStall stall;
+  final bool verified;
+  final VoidCallback onScanQr;
+  final VoidCallback? onOpenStore;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = stall.asStore();
+    final product = store.products.isEmpty ? null : store.products.first;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            stall.name,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: AppColors.navy,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text('${stall.floor}층 · ${stall.use.labelKo}'),
+          if (product != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              '마감할인  ${product.name}  ·  ${_won(product.discountPrice)}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: AppColors.pinRed,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            verified
+                ? '이미 QR 인증한 점포입니다. 다시 찍거나 이용내역에서 리뷰를 남길 수 있습니다.'
+                : '지도 핀이 없는 내부 점포도 QR 인증과 마감할인 예약이 됩니다.',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 14),
+          if (onOpenStore != null && store.products.isNotEmpty) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onOpenStore,
+                child: const Text('가게·상품 자세히 보기'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onScanQr,
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+              label: Text(verified ? 'QR 다시 인증하기' : 'QR 인증하기'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _won(int v) {
+    final s = v.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      final left = s.length - i;
+      buf.write(s[i]);
+      if (left > 1 && left % 3 == 1) buf.write(',');
+    }
+    return '$buf' '원';
   }
 }
 
