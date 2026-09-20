@@ -14,10 +14,12 @@ class IndoorCamera {
   final Size mapSize;
   final double pad;
   Offset focus;
-  double scale = referenceScale;
+  double scale = startScale;
   double rotation = 0;
 
   static const referenceScale = 0.45;
+  static const labelMinScale = 0.86;
+  static const startScale = 1.1;
   static const avatarBaseSize = Size(22, 36);
   static const avatarShadowSize = Size(9, 3);
 
@@ -75,6 +77,14 @@ class IndoorCamera {
     return focus + screenVectorToWorld(screen - characterScreen(viewport));
   }
 
+  Offset worldToScreen(Offset world, Size viewport) {
+    final origin = characterScreen(viewport);
+    final d = world - focus;
+    final c = math.cos(rotation);
+    final s = math.sin(rotation);
+    return origin + Offset(d.dx * c - d.dy * s, d.dx * s + d.dy * c) * scale;
+  }
+
   Matrix4 mapMatrix(Size viewport) {
     final origin = characterScreen(viewport);
     return Matrix4.identity()
@@ -89,5 +99,103 @@ class IndoorCamera {
       if (stall.path.contains(world)) return stall;
     }
     return null;
+  }
+
+  /// 칸 안에 있지 않아도, 양동시장처럼 옆 골목에서 가까운 점포를 켠다.
+  IndoorStall? nearest(Offset world, List<IndoorStall> stalls, {double maxDist = 72}) {
+    IndoorStall? best;
+    var bestDist = maxDist;
+    for (final stall in stalls) {
+      final d = distanceToRect(world, stall.bounds);
+      if (d < bestDist) {
+        bestDist = d;
+        best = stall;
+      }
+    }
+    return best;
+  }
+
+  static double distanceToRect(Offset point, Rect rect) {
+    final nearest = Offset(
+      point.dx.clamp(rect.left, rect.right),
+      point.dy.clamp(rect.top, rect.bottom),
+    );
+    return (nearest - point).distance;
+  }
+}
+
+/// 내부 지도 시연 경로를 일정 속도로 따라간다.
+class IndoorPathWalker {
+  IndoorPathWalker(this.path);
+
+  final List<Offset> path;
+  int index = 0;
+  double t = 0;
+  bool running = false;
+  bool paused = false;
+
+  static const pixelsPerTick = 5.0;
+
+  bool get walking => running && !paused;
+
+  Offset get position {
+    if (path.isEmpty) return Offset.zero;
+    if (index >= path.length - 1) return path.last;
+    return Offset.lerp(path[index], path[index + 1], t.clamp(0, 1))!;
+  }
+
+  void start() {
+    running = path.length >= 2;
+    paused = false;
+    index = 0;
+    t = 0;
+  }
+
+  void pause() {
+    if (running) paused = true;
+  }
+
+  void resume() {
+    if (running) paused = false;
+  }
+
+  void stop() {
+    running = false;
+    paused = false;
+  }
+
+  Offset? tick({double pixels = pixelsPerTick}) {
+    if (!running || paused || path.length < 2) return null;
+    if (index >= path.length - 1) {
+      running = false;
+      return path.last;
+    }
+
+    var remaining = pixels;
+    while (remaining > 0 && index < path.length - 1) {
+      final from = path[index];
+      final to = path[index + 1];
+      final len = (to - from).distance;
+      if (len < 0.001) {
+        index += 1;
+        t = 0;
+        continue;
+      }
+      final left = (1 - t) * len;
+      if (remaining >= left) {
+        remaining -= left;
+        index += 1;
+        t = 0;
+      } else {
+        t += remaining / len;
+        remaining = 0;
+      }
+    }
+
+    if (index >= path.length - 1) {
+      running = false;
+      return path.last;
+    }
+    return position;
   }
 }

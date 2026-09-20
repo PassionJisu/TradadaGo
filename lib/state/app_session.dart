@@ -38,6 +38,7 @@ class AppSession extends ChangeNotifier {
   String displayName = '관리자';
 
   final Set<String> uniqueVisitStoreIds = {};
+  final Set<String> qrVerifiedStoreIds = {};
   final Map<String, DateTime> lastVisitStampAt = {};
   final List<CollectedStamp> stamps = [];
   final List<Reservation> reservations = [];
@@ -83,6 +84,46 @@ class AppSession extends ChangeNotifier {
   }
 
   bool hasEverVisited(String storeId) => uniqueVisitStoreIds.contains(storeId);
+
+  Set<String> get paintedStoreIds => {
+    for (final review in reviews)
+      if (review.isMine) review.storeId,
+  };
+
+  bool hasPainted(String storeId) => paintedStoreIds.contains(storeId);
+
+  bool hasQrVerified(String storeId) => qrVerifiedStoreIds.contains(storeId);
+
+  bool canWriteReview(String storeId) => unreviewedQrVisit(storeId) != null;
+
+  Reservation? unreviewedQrVisit(String storeId) {
+    for (final item in reservations) {
+      if (item.storeId == storeId && item.isQrVisit && !item.hasReview) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  bool canWriteReviewFor(Reservation item) =>
+      item.isQrVisit && !item.hasReview;
+
+  void markQrVerified(Store store) {
+    qrVerifiedStoreIds.add(store.id);
+    reservations.insert(
+      0,
+      Reservation(
+        id: 'qr-${DateTime.now().microsecondsSinceEpoch}',
+        storeId: store.id,
+        storeName: store.name,
+        productName: '현장 방문',
+        price: 0,
+        createdAt: DateTime.now(),
+        kind: UsageKind.qrVisit,
+      ),
+    );
+    notifyListeners();
+  }
 
   StampGrant addDemoVisitStamp() {
     return addDemoVisitStamps(1);
@@ -194,25 +235,63 @@ class AppSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addPhotoReview({
+  StampGrant addPhotoReview({
     required Store store,
     required String body,
     required String photoAsset,
+    String? visitId,
   }) {
-    reviews.insert(
-      0,
-      Review(
-        id: 'mine-${DateTime.now().microsecondsSinceEpoch}',
-        author: displayName,
-        storeId: store.id,
-        storeName: store.name,
-        body: body,
-        photoAsset: photoAsset,
-        createdAt: DateTime.now(),
-        isMine: true,
-      ),
+    Reservation? visit;
+    if (visitId != null) {
+      for (final item in reservations) {
+        if (item.id == visitId) {
+          visit = item;
+          break;
+        }
+      }
+    }
+    visit ??= unreviewedQrVisit(store.id);
+    if (visit == null || visit.hasReview) {
+      return const StampGrant(
+        added: false,
+        message: '이 방문은 이미 리뷰를 남겼습니다. QR을 다시 인증하면 새 방문으로 작성할 수 있습니다.',
+      );
+    }
+
+    final review = Review(
+      id: 'mine-${DateTime.now().microsecondsSinceEpoch}',
+      author: displayName,
+      storeId: store.id,
+      storeName: store.name,
+      body: body,
+      photoAsset: photoAsset,
+      createdAt: DateTime.now(),
+      isMine: true,
     );
-    addReviewBonusStamp();
+    reviews.insert(0, review);
+    visit.reviewId = review.id;
+    qrVerifiedStoreIds.add(store.id);
+    StampGrant grant;
+    if (!hasEverVisited(store.id) || !hasVisitStampToday(store.id)) {
+      lastVisitStampAt[store.id] = DateTime.now();
+      uniqueVisitStoreIds.add(store.id);
+      _appendStamp(source: 'visit');
+      final title = _unlockTitles();
+      grant = StampGrant(
+        added: true,
+        message: title == null
+            ? '리뷰가 등록되어 방문 완료 · 스탬프 · 지도 색칠이 반영되었습니다.'
+            : '${title.korean}(${title.english}) 칭호와 상품권이 지급되었습니다.',
+        unlockedTitle: title,
+      );
+    } else {
+      grant = const StampGrant(
+        added: false,
+        message: '리뷰가 등록되어 지도에 색칠되었습니다. 오늘 스탬프는 이미 받았습니다.',
+      );
+    }
+    notifyListeners();
+    return grant;
   }
 
   List<Review> weeklyRanking() {
@@ -222,6 +301,14 @@ class AppSession extends ChangeNotifier {
 
   List<Review> reviewsForStore(String storeId) {
     return reviews.where((r) => r.storeId == storeId).toList();
+  }
+
+  Review? reviewById(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final review in reviews) {
+      if (review.id == id) return review;
+    }
+    return null;
   }
 
   TitleTier? nextTitle() {
@@ -291,8 +378,8 @@ List<Review> _seedReviews() {
       author: '충장로막내',
       storeId: 'yd-honguh',
       storeName: '양동홍어타운',
-      body: '마감 세트가 푸짐해요. 시장 골목 분위기도 그대로라 또 오고 싶습니다.',
-      photoAsset: AppAssets.landmarkChungjang,
+      body: '홍어모둠이 푸짐해요. 시장 골목 분위기 그대로라 또 오고 싶습니다.',
+      photoAsset: AppAssets.foodHonguh,
       createdAt: DateTime.now().subtract(const Duration(hours: 5)),
       likes: 21,
     ),
@@ -302,7 +389,7 @@ List<Review> _seedReviews() {
       storeId: 'yd-gukbap',
       storeName: '천변국밥',
       body: '국물이 진하고 픽업이 빨라요. 포토 남기러 온 보람 있습니다.',
-      photoAsset: AppAssets.landmarkMudeung,
+      photoAsset: AppAssets.foodGukbap,
       createdAt: DateTime.now().subtract(const Duration(hours: 8)),
       likes: 34,
     ),
@@ -312,7 +399,7 @@ List<Review> _seedReviews() {
       storeId: 'yd-gimbap',
       storeName: '양동김밥명가',
       body: '김밥 4줄 마감백 가성비 최고. 스탬프 찍고 바로 먹었습니다.',
-      photoAsset: AppAssets.landmarkYangnim,
+      photoAsset: AppAssets.foodGimbap,
       createdAt: DateTime.now().subtract(const Duration(days: 1)),
       likes: 17,
     ),
@@ -322,7 +409,7 @@ List<Review> _seedReviews() {
       storeId: 'yd-fruit',
       storeName: '햇살과일',
       body: '제철 과일 모음이 신선합니다. 사진으로 남기기 좋아요.',
-      photoAsset: AppAssets.landmarkAcc,
+      photoAsset: AppAssets.foodFruit,
       createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
       likes: 12,
     ),
@@ -332,7 +419,7 @@ List<Review> _seedReviews() {
       storeId: 'yd-jeon',
       storeName: '할머니전집',
       body: '모둠전이 바삭. 시장 구경 코스로 추천합니다.',
-      photoAsset: AppAssets.landmark518,
+      photoAsset: AppAssets.foodJeon,
       createdAt: DateTime.now().subtract(const Duration(days: 2)),
       likes: 9,
     ),
@@ -341,10 +428,110 @@ List<Review> _seedReviews() {
       author: '양동단골',
       storeId: 'yd-honguh',
       storeName: '양동홍어타운',
-      body: '두 번째 방문도 만족스러워요. 마감 세트가 늘 알찹니다.',
-      photoAsset: AppAssets.yangdongPlayMap,
+      body: '홍어찜도 잡내 없이 깔끔합니다. 저녁 픽업 추천.',
+      photoAsset: AppAssets.foodSeafood,
       createdAt: DateTime.now().subtract(const Duration(days: 3)),
       likes: 6,
+    ),
+    Review(
+      id: 'r7',
+      author: '송정역나그네',
+      storeId: 'yd-yukhoe',
+      storeName: '빛고을육회',
+      body: '육회가 달고 고소해요. 마감팩이라 양이 알찹니다.',
+      photoAsset: AppAssets.foodYukhoe,
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+      likes: 19,
+    ),
+    Review(
+      id: 'r8',
+      author: '하남별빛',
+      storeId: 'yd-susan',
+      storeName: '싱싱수산',
+      body: '고등어 구이 껍질이 바삭. 갈치까지 한 팩이라 저녁이 해결됐어요.',
+      photoAsset: AppAssets.foodMackerel,
+      createdAt: DateTime.now().subtract(const Duration(hours: 11)),
+      likes: 14,
+    ),
+    Review(
+      id: 'r9',
+      author: '첨단산책러',
+      storeId: 'yd-tteok',
+      storeName: '양동떡집',
+      body: '인절미가 쫄깃하고 콩가루가 고소합니다. 간식용으로 최고.',
+      photoAsset: AppAssets.foodTteok,
+      createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 4)),
+      likes: 11,
+    ),
+    Review(
+      id: 'r10',
+      author: '양동야시장',
+      storeId: 'yd-gunbam',
+      storeName: '밤마실군밤',
+      body: '군밤이 달고 따뜻해요. 골목에서 먹으니 더 맛있습니다.',
+      photoAsset: AppAssets.foodGunbam,
+      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+      likes: 16,
+    ),
+    Review(
+      id: 'r11',
+      author: '동명골목',
+      storeId: 'yd-gimbap',
+      storeName: '양동김밥명가',
+      body: '떡볶이 국물이 칼칼하고 매콤해요. 김밥이랑 같이 픽업 강추.',
+      photoAsset: AppAssets.foodTteokbokki,
+      createdAt: DateTime.now().subtract(const Duration(hours: 6)),
+      likes: 13,
+    ),
+    Review(
+      id: 'r12',
+      author: '풍암주부',
+      storeId: 'yd-hanbok',
+      storeName: '고운한복',
+      body: '손수건 세트가 단정하고 포장도 예뻐요. 선물용으로 샀습니다.',
+      photoAsset: AppAssets.foodBojagi,
+      createdAt: DateTime.now().subtract(const Duration(days: 4)),
+      likes: 8,
+    ),
+    Review(
+      id: 'r13',
+      author: '수완저녁',
+      storeId: 'yd-gukbap',
+      storeName: '천변국밥',
+      body: '수육 포장도 야들야들. 국밥이랑 같이 시키면 든든합니다.',
+      photoAsset: AppAssets.foodGukbap,
+      createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 6)),
+      likes: 10,
+    ),
+    Review(
+      id: 'r14',
+      author: '상무로터리',
+      storeId: 'yd-susan',
+      storeName: '싱싱수산',
+      body: '굴비 소팩이 짜지 않고 담백해요. 밥반찬으로 딱입니다.',
+      photoAsset: AppAssets.foodDried,
+      createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 8)),
+      likes: 7,
+    ),
+    Review(
+      id: 'r15',
+      author: '법성포길손',
+      storeId: 'yd-gulbi',
+      storeName: '영광굴비',
+      body: '굴비가 기름지고 간도 세지 않아요. A동 건어물 코스로 추천합니다.',
+      photoAsset: AppAssets.foodDried,
+      createdAt: DateTime.now().subtract(const Duration(hours: 4)),
+      likes: 15,
+    ),
+    Review(
+      id: 'r16',
+      author: '통영나들이',
+      storeId: 'yd-myeolchi',
+      storeName: '통영멸치',
+      body: '볶음멸치가 바삭하고 달지 않아요. 국물멸치도 시원합니다.',
+      photoAsset: AppAssets.foodDried,
+      createdAt: DateTime.now().subtract(const Duration(hours: 9)),
+      likes: 9,
     ),
   ];
 }

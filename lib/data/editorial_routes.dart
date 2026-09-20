@@ -9,7 +9,7 @@ abstract final class EditorialRoutes {
       kicker: '시장 미식',
       duration: '약 90분',
       distance: '800m',
-      coverAsset: AppAssets.yangdongPlayMap,
+      coverAsset: AppAssets.foodGimbap,
       summary:
           '광주의 부엌 양동시장을 홍어부터 군밤까지 한 바퀴. 마감할인 픽업 창구를 따라가면 걸음마다 스탬프가 쌓입니다.',
       stops: [
@@ -42,11 +42,11 @@ abstract final class EditorialRoutes {
       distance: '시장 3곳',
       coverAsset: AppAssets.landmarkChungjang,
       summary:
-          '양동에서 시작해 대인·말바우까지. 1차 데모는 양동만 입장되지만, 지도 핀으로 하루 동선을 미리 그려보세요.',
+          '양동에서 시작해 대인·시장 데모까지. 양동은 조감도, 시장 데모는 내부 지도로 입장할 수 있습니다.',
       stops: [
         EditorialStop(name: '양동시장', note: '조감도 입장 · 스탬프'),
         EditorialStop(name: '대인시장', note: '야시장 골목 예습'),
-        EditorialStop(name: '말바우시장', note: '북구 생활시장'),
+        EditorialStop(name: '시장 데모', note: '내부 지도 시연'),
         EditorialStop(name: '충장로', note: '번화가에서 하루 마무리'),
       ],
     ),

@@ -24,6 +24,7 @@ class HomeMapScreenState extends State<HomeMapScreen> {
   bool _mapReady = false;
   NaverMapController? _map;
   final _playKey = GlobalKey<MarketPlayViewState>();
+  final _indoorKey = GlobalKey<SangjuIndoorMapScreenState>();
 
   LocationSession get _loc => LocationSession.instance;
 
@@ -43,6 +44,10 @@ class HomeMapScreenState extends State<HomeMapScreen> {
   void openStampFlow() {
     if (_focused == null) {
       showAppNotice(context, '시장 핀을 눌러 조감도로 들어가세요.');
+      return;
+    }
+    if (_focused!.id == GwangjuMarkets.malbau.id) {
+      _indoorKey.currentState?.openNearbyStamp();
       return;
     }
     _playKey.currentState?.openNearbyStamp();
@@ -129,8 +134,12 @@ class HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   void _openMarket(Market market) {
+    if (market.id == GwangjuMarkets.malbau.id) {
+      setState(() => _focused = market);
+      return;
+    }
     if (!market.isDemoReady) {
-      showAppNotice(context, '${market.name}은 다음 단계에서 열립니다. 양동시장을 선택하세요.');
+      showAppNotice(context, '${market.name}은 다음 단계에서 열립니다. 양동시장 또는 시장 데모를 선택하세요.');
       return;
     }
     _loc.enterMarketPlay(
@@ -158,7 +167,14 @@ class HomeMapScreenState extends State<HomeMapScreen> {
       duration: const Duration(milliseconds: 420),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
-      child: _focused == null ? _cityMap() : _playMap(),
+      child: _focused == null
+          ? _cityMap()
+          : _focused!.id == GwangjuMarkets.malbau.id
+              ? SangjuIndoorMapScreen(
+                  key: _indoorKey,
+                  onBack: _backToCity,
+                )
+              : _playMap(),
     );
   }
 
@@ -200,7 +216,7 @@ class HomeMapScreenState extends State<HomeMapScreen> {
                 ),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
-                child: _HintChip('광주 전통시장 핀만 표시됩니다. 양동시장을 눌러 입장하세요.'),
+                child: _HintChip('광주 전통시장 핀만 표시됩니다. 양동시장 또는 시장 데모를 눌러 입장하세요.'),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -258,7 +274,7 @@ class _CityHeader extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
           child: Row(
             children: [
-              Image.asset(AppAssets.logo, width: 48, height: 48),
+              Image.asset(AppAssets.emblem, width: 48, height: 48),
               const SizedBox(width: 6),
               Expanded(
                 child: Column(

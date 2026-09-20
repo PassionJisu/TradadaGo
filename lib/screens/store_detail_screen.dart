@@ -22,9 +22,12 @@ class StoreDetailScreen extends StatelessWidget {
       listenable: AppSession.instance,
       builder: (context, _) {
         final nearby = LocationSession.instance.isNear(store.position);
+        final canScan = !store.requireGps || nearby;
         final stampedToday =
             AppSession.instance.hasVisitStampToday(store.id);
-        final visited = AppSession.instance.hasEverVisited(store.id);
+        final painted = AppSession.instance.hasPainted(store.id);
+        final canReview = AppSession.instance.canWriteReview(store.id);
+        final storeReviews = AppSession.instance.reviewsForStore(store.id);
 
         return Scaffold(
       backgroundColor: AppColors.skyLight,
@@ -65,10 +68,14 @@ class StoreDetailScreen extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      nearby ? '스탬프 가능' : '접근 필요',
+                      painted
+                          ? '방문 완료'
+                          : (canScan ? 'QR 인증 가능' : '접근 필요'),
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        color: nearby ? AppColors.teal : const Color(0xFF9AA3AF),
+                        color: painted || canScan
+                            ? AppColors.teal
+                            : const Color(0xFF9AA3AF),
                       ),
                     ),
                   ],
@@ -92,19 +99,21 @@ class StoreDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
-            '마감할인 상품',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.navy,
+          if (store.products.isNotEmpty) ...[
+            const Text(
+              '마감할인 상품',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          ...store.products.map((p) => _ProductCard(store: store, product: p)),
-          const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            ...store.products.map((p) => _ProductCard(store: store, product: p)),
+            const SizedBox(height: 16),
+          ],
           FilledButton.icon(
-            onPressed: nearby
+            onPressed: canScan
                 ? () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -114,21 +123,73 @@ class StoreDetailScreen extends StatelessWidget {
                   }
                 : null,
             icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: Text(nearby ? 'QR 스캔하고 스탬프 받기' : '가게 앞에서만 QR 인증이 됩니다'),
+            label: Text(canScan ? 'QR 인증하기' : '가게 앞에서만 QR 인증이 됩니다'),
           ),
           const SizedBox(height: 10),
-          if (visited)
+          if (canReview)
             OutlinedButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => WriteReviewScreen(store: store),
+                    builder: (_) => WriteReviewScreen(
+                      store: store,
+                      visitId: AppSession.instance.unreviewedQrVisit(store.id)?.id,
+                    ),
                   ),
                 );
               },
               icon: const Icon(Icons.photo_camera_outlined),
-              label: const Text('포토 리뷰 쓰고 보너스 스탬프'),
+              label: const Text('포토 리뷰 쓰기'),
             ),
+          if (storeReviews.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            const Text(
+              '이 가게 리뷰',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final review in storeReviews.take(6))
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(
+                        review.photoAsset,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            review.author,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(review.body, style: const TextStyle(height: 1.35)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
           const SizedBox(height: 10),
           TextButton(
             onPressed: () {
@@ -170,6 +231,18 @@ class _ProductCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (product.imageAsset != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                product.imageAsset!,
+                height: 140,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             product.name,
             style: const TextStyle(

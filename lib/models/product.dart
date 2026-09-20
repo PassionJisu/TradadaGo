@@ -6,6 +6,7 @@ class Product {
     required this.discountPrice,
     required this.quantity,
     required this.pickupWindow,
+    this.imageAsset,
   });
 
   final String id;
@@ -14,6 +15,7 @@ class Product {
   final int discountPrice;
   final int quantity;
   final String pickupWindow;
+  final String? imageAsset;
 
   int get saveAmount => originalPrice - discountPrice;
 

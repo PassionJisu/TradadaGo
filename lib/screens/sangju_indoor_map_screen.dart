@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,25 +8,46 @@ import 'package:google_fonts/google_fonts.dart';
 import '../config/assets.dart';
 import '../data/sangju_indoor_map.dart';
 import '../map/indoor_camera.dart';
+import '../map/market_blueprint.dart';
 import '../map/sangju_indoor_painter.dart';
+import '../map/store_pin_images.dart';
 import '../models/indoor_stall.dart';
+import 'qr_scan_screen.dart';
+import 'store_detail_screen.dart';
+import '../state/app_session.dart';
 import '../theme/app_colors.dart';
+import '../util/app_notice.dart';
+import '../widgets/market_map_controls.dart';
 
 class SangjuIndoorMapScreen extends StatefulWidget {
-  const SangjuIndoorMapScreen({super.key});
+  const SangjuIndoorMapScreen({
+    super.key,
+    this.title = '시장 데모',
+    this.onBack,
+  });
+
+  final String title;
+  final VoidCallback? onBack;
 
   @override
-  State<SangjuIndoorMapScreen> createState() => _SangjuIndoorMapScreenState();
+  SangjuIndoorMapScreenState createState() => SangjuIndoorMapScreenState();
 }
 
-class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
+class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     with TickerProviderStateMixin {
   SangjuIndoorMap? _data;
   IndoorCamera? _camera;
   IndoorStall? _nearby;
-  Offset _stick = Offset.zero;
+  IndoorPathWalker? _walker;
+  int _floor = 1;
+  StallUse? _filterUse;
   late final AnimationController _pulse;
   late final Ticker _walk;
+  Timer? _locateTimer;
+  IndoorStall? _locateStall;
+  Offset? _homeFocus;
+  double? _homeScale;
+  double? _homeRotation;
 
   double _startScale = 1;
   double _startRotation = 0;
@@ -51,11 +73,15 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
         pad: data.pad,
         focus: data.startFocus,
       );
+      _walker = IndoorPathWalker(data.demoWalkPath);
     });
+    await StorePinImages.ensureLoaded();
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _locateTimer?.cancel();
     _pulse.dispose();
     _walk.dispose();
     super.dispose();
@@ -63,17 +89,127 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
 
   void _onWalk(Duration _) {
     final camera = _camera;
-    if (camera == null || _stick.distance < 0.12) return;
-    camera.walkInView(_stick, 9);
+    final walker = _walker;
+    if (camera == null ||
+        walker == null ||
+        !walker.walking ||
+        _locateStall != null) {
+      return;
+    }
+    final next = walker.tick();
+    if (next != null) {
+      camera.focus = next;
+      camera.clampFocus();
+    }
     _syncNearby();
     setState(() {});
+  }
+
+  void _startDemoWalk() {
+    final data = _data;
+    final camera = _camera;
+    final walker = _walker;
+    if (data == null || camera == null || walker == null) return;
+    _locateTimer?.cancel();
+    _locateStall = null;
+    _homeFocus = null;
+    _homeScale = null;
+    _homeRotation = null;
+    walker.start();
+    camera.focus = walker.position;
+    camera.clampFocus();
+    _resumeAvatarPulse();
+    setState(() {
+      _floor = 1;
+      _filterUse = null;
+      _syncNearby();
+    });
+  }
+
+  void _pauseDemoWalk() {
+    _walker?.pause();
+    _pauseAvatarPulse();
+    if (mounted) setState(() {});
+  }
+
+  void _resumeDemoWalk() {
+    _walker?.resume();
+    _resumeAvatarPulse();
+    if (mounted) setState(() {});
+  }
+
+  void _stopDemoWalk() {
+    _walker?.stop();
+    _resumeAvatarPulse();
+    if (mounted) setState(() {});
+  }
+
+  void _pauseAvatarPulse() {
+    if (_pulse.isAnimating) _pulse.stop();
+  }
+
+  void _resumeAvatarPulse() {
+    if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+  }
+
+  Widget _demoWalkBar() {
+    final inSession = _walker?.running == true;
+    final paused = _walker?.paused == true;
+    return Row(
+      children: [
+        if (inSession) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _stopDemoWalk,
+              icon: const Icon(Icons.stop_rounded),
+              label: const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('시연 경로 정지'),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: !inSession
+                ? _startDemoWalk
+                : paused
+                    ? _resumeDemoWalk
+                    : _pauseDemoWalk,
+            icon: Icon(
+              !inSession
+                  ? Icons.directions_walk_rounded
+                  : paused
+                      ? Icons.play_arrow_rounded
+                      : Icons.pause_rounded,
+            ),
+            label: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                !inSession
+                    ? '골목 시연 걷기'
+                    : paused
+                        ? '이어서 걷기'
+                        : '일시정지',
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   void _syncNearby() {
     final camera = _camera;
     final data = _data;
     if (camera == null || data == null) return;
-    _nearby = camera.hit(camera.focus, data.stalls);
+    final hit = camera.nearest(camera.focus, data.stallsOnFloor(_floor));
+    if (hit != null && _filterUse != null && hit.use != _filterUse) {
+      _nearby = null;
+      return;
+    }
+    _nearby = hit;
   }
 
   void _onScaleStart(ScaleStartDetails details) {
@@ -85,7 +221,9 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
 
   void _onScaleUpdate(ScaleUpdateDetails details, Size viewport) {
     final camera = _camera;
-    if (camera == null || details.pointerCount < 2) return;
+    if (camera == null || details.pointerCount < 2 || _locateStall != null) {
+      return;
+    }
     camera.scale = _startScale * details.scale;
     camera.rotation = _startRotation + details.rotation;
     camera.clampScale(viewport);
@@ -98,11 +236,31 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     final data = _data;
     if (camera == null || data == null) return;
     final world = camera.screenToWorld(details.localPosition, viewport);
-    final stall = camera.hit(world, data.stalls);
-    if (stall != null) _showStall(stall);
+    final stall = camera.hit(world, data.stallsOnFloor(_floor));
+    if (stall == null) return;
+    if (_filterUse != null && stall.use != _filterUse) return;
+    _showStall(stall);
+  }
+
+  void openNearbyStamp() {
+    final stall = _nearby;
+    if (stall == null) {
+      showAppNotice(context, '가게 칸이 켜질 때까지 골목을 걸어주세요.');
+      return;
+    }
+    _openQr(stall);
+  }
+
+  void _openQr(IndoorStall stall) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => QrScanScreen(store: stall.asStore()),
+      ),
+    );
   }
 
   void _showStall(IndoorStall stall) {
+    final verified = AppSession.instance.hasQrVerified(stall.id);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -110,29 +268,21 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                stall.name,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.navy,
-                ),
+        return IndoorStallSheet(
+          stall: stall,
+          verified: verified,
+          onScanQr: () {
+            Navigator.pop(ctx);
+            _openQr(stall);
+          },
+          onOpenStore: () {
+            Navigator.pop(ctx);
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => StoreDetailScreen(store: stall.asStore()),
               ),
-              const SizedBox(height: 6),
-              Text('${stall.floor}층 · 상주종합시장 공식 점포안내도'),
-              const SizedBox(height: 10),
-              const Text(
-                '점포 위치는 공식 배치도의 영역 좌표를 그대로 옮겼습니다.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -142,15 +292,29 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
   Widget build(BuildContext context) {
     final data = _data;
     final camera = _camera;
-    return Scaffold(
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    const navClearance = 72.0;
+    return ListenableBuilder(
+      listenable: AppSession.instance,
+      builder: (context, _) {
+        return Scaffold(
+      backgroundColor: Colors.transparent,
       body: data == null || camera == null
           ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
           : LayoutBuilder(
               builder: (context, constraints) {
                 final viewport = Size(constraints.maxWidth, constraints.maxHeight);
-                camera.clampScale(viewport);
-                camera.clampFocus();
-                final origin = camera.characterScreen(viewport);
+                if (_locateStall == null) {
+                  camera.clampScale(viewport);
+                  camera.clampFocus();
+                }
+                final origin = _locateStall != null && _homeFocus != null
+                    ? camera.worldToScreen(_homeFocus!, viewport)
+                    : camera.characterScreen(viewport);
+                final paintedIds = AppSession.instance.paintedStoreIds;
+                final painted = data.stalls
+                    .where((stall) => paintedIds.contains(stall.id))
+                    .length;
                 return Stack(
                   fit: StackFit.expand,
                   children: [
@@ -190,27 +354,146 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                               pad: data.pad,
                               scale: camera.scale,
                               matrix: camera.mapMatrix(viewport),
-                              highlightId: _nearby?.id,
+                              highlightId: _locateStall?.id ?? _nearby?.id,
+                              floorFilter: _floor,
+                              useFilter: _filterUse,
+                              visitedIds: Set<String>.of(paintedIds),
+                              pinIdle: StorePinImages.idle,
+                              pinActive: StorePinImages.active,
+                              rotation: camera.rotation,
                             ),
                           ),
                         ),
                       ),
                     ),
                     _avatar(origin, camera),
-                    SafeArea(child: _hud(data, camera, viewport)),
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: SafeArea(
+                        bottom: false,
+                        child: _hud(data, camera, viewport),
+                      ),
+                    ),
                     Positioned(
                       left: 16,
-                      bottom: 28,
-                      child: _Joystick(
-                        value: _stick,
-                        onChanged: (v) => setState(() => _stick = v),
+                      right: 16,
+                      bottom: safeBottom + navClearance + 40,
+                      child: _demoWalkBar(),
+                    ),
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: safeBottom + 64,
+                      child: PaintProgressBanner(
+                        painted: painted,
+                        total: data.stalls.length,
+                        compact: true,
                       ),
                     ),
                   ],
                 );
               },
             ),
+        );
+      },
     );
+  }
+
+  void _openIndex(SangjuIndoorMap data, IndoorCamera camera, Size viewport) {
+    final listed = data.uniqueNamed(
+      data.stallsOnFloor(_floor, use: _filterUse),
+    );
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          maxChildSize: 0.92,
+          builder: (ctx, scrollController) {
+            return ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+              children: [
+                Text(
+                  '점포 목록',
+                  style: GoogleFonts.jua(fontSize: 22, color: AppColors.navy),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  '이름을 누르면 지도에서 위치를 잠시 보여줍니다.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                ),
+                const SizedBox(height: 8),
+                for (final stall in listed)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: stall.use.color.withValues(alpha: 0.18),
+                      child: Text(stall.use.emoji),
+                    ),
+                    title: Text(
+                      stall.name,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text('${stall.floor}층 · ${stall.use.labelKo}'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _peekStall(stall, camera, viewport);
+                    },
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _peekStall(IndoorStall stall, IndoorCamera camera, Size viewport) {
+    _walker?.stop();
+    _resumeAvatarPulse();
+    _locateTimer?.cancel();
+    _homeFocus ??= camera.focus;
+    _homeScale ??= camera.scale;
+    _homeRotation ??= camera.rotation;
+
+    final origin = _homeFocus!;
+    final target = stall.bounds.center;
+    final span = (target - origin).distance;
+    final fit = math.min(
+      viewport.width / camera.mapSize.width,
+      viewport.height / camera.mapSize.height,
+    );
+    final desired =
+        math.min(viewport.width, viewport.height) / (span * 1.7 + 240);
+    camera.focus = Offset.lerp(origin, target, 0.5)!;
+    camera.scale = desired.clamp(fit, _homeScale!);
+    camera.rotation = 0;
+    _locateStall = stall;
+    setState(() {});
+
+    _locateTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      final cam = _camera;
+      if (cam != null) {
+        cam.focus = _homeFocus ?? cam.focus;
+        cam.scale = _homeScale ?? cam.scale;
+        cam.rotation = _homeRotation ?? cam.rotation;
+      }
+      _homeFocus = null;
+      _homeScale = null;
+      _homeRotation = null;
+      _locateStall = null;
+      _syncNearby();
+      setState(() {});
+    });
   }
 
   Widget _avatar(Offset origin, IndoorCamera camera) {
@@ -258,6 +541,7 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Material(
             color: const Color(0xE6FFF8E8),
@@ -267,25 +551,29 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.arrow_back_rounded),
                     color: AppColors.navy,
                   ),
-                  Image.asset(AppAssets.logo, width: 44, height: 44),
+                  Image.asset(AppAssets.emblem, width: 44, height: 44),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '상주종합시장',
+                          widget.title,
                           style: GoogleFonts.jua(
                             fontSize: 20,
                             color: AppColors.navy,
                           ),
                         ),
                         Text(
-                          '내부 지도 · 점포 ${data.stalls.length}곳 · 캐릭터 고정',
+                          _walker?.paused == true
+                              ? '내부 지도 · 골목 시연 일시정지'
+                              : _walker?.running == true
+                                  ? '내부 지도 · 골목 시연 경로 이동 중'
+                                  : '내부 지도 · 점포 ${data.stalls.length}곳 · 캐릭터 고정',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -299,7 +587,57 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
               ),
             ),
           ),
-          if (_nearby != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: MarketMapToolbar(
+              categoryLabel: _filterUse == null
+                  ? '카테고리 선택'
+                  : '${_filterUse!.emoji} ${_filterUse!.labelKo}',
+              floorLabel: '$_floor층 선택',
+              categoryActive: _filterUse != null,
+              onCategory: () => showCategoryPicker(
+                context: context,
+                uses: data.usesOnFloor(_floor),
+                selected: _filterUse,
+                onSelected: (use) => setState(() => _filterUse = use),
+              ),
+              onFloor: () => showFloorPicker(
+                context: context,
+                floors: data.floors,
+                selectedId: '$_floor',
+                onSelected: (id) => setState(() {
+                  _walker?.stop();
+                  _resumeAvatarPulse();
+                  _floor = int.parse(id);
+                  _filterUse = null;
+                  _syncNearby();
+                }),
+              ),
+              onStores: () => _openIndex(data, camera, viewport),
+            ),
+          ),
+          if (_locateStall != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Material(
+                color: AppColors.gold,
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    '${_locateStall!.name} · 여기',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else if (_nearby != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Material(
@@ -324,126 +662,97 @@ class _SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                 ),
               ),
             ),
-          const Spacer(),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Column(
-              children: [
-                _RoundCtrl(
-                  icon: Icons.add,
-                  onTap: () {
-                    camera.scale = math.min(
-                      IndoorCamera.maxScale,
-                      camera.scale * 1.18,
-                    );
-                    setState(() {});
-                  },
-                ),
-                const SizedBox(height: 8),
-                _RoundCtrl(
-                  icon: Icons.remove,
-                  onTap: () {
-                    camera.scale = math.max(
-                      camera.minScale(viewport),
-                      camera.scale / 1.18,
-                    );
-                    setState(() {});
-                  },
-                ),
-                const SizedBox(height: 8),
-                _RoundCtrl(
-                  icon: Icons.explore_outlined,
-                  onTap: () {
-                    camera.rotation = 0;
-                    setState(() {});
-                  },
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
   }
 }
 
-class _RoundCtrl extends StatelessWidget {
-  const _RoundCtrl({required this.icon, required this.onTap});
+class IndoorStallSheet extends StatelessWidget {
+  const IndoorStallSheet({
+    super.key,
+    required this.stall,
+    required this.verified,
+    required this.onScanQr,
+    this.onOpenStore,
+  });
 
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 3,
-      shape: const CircleBorder(),
-      child: IconButton(
-        onPressed: onTap,
-        icon: Icon(icon, color: AppColors.navy),
-      ),
-    );
-  }
-}
-
-class _Joystick extends StatelessWidget {
-  const _Joystick({required this.value, required this.onChanged});
-
-  final Offset value;
-  final ValueChanged<Offset> onChanged;
-
-  static const size = 118.0;
+  final IndoorStall stall;
+  final bool verified;
+  final VoidCallback onScanQr;
+  final VoidCallback? onOpenStore;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: GestureDetector(
-        onPanStart: (d) => _update(d.localPosition),
-        onPanUpdate: (d) => _update(d.localPosition),
-        onPanEnd: (_) => onChanged(Offset.zero),
-        onPanCancel: () => onChanged(Offset.zero),
-        child: CustomPaint(painter: _JoystickPainter(value)),
+    final store = stall.asStore();
+    final product = store.products.isEmpty ? null : store.products.first;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            stall.name,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: AppColors.navy,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text('${stall.floor}층 · ${stall.use.labelKo}'),
+          if (product != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              '마감할인  ${product.name}  ·  ${_won(product.discountPrice)}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: AppColors.pinRed,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            verified
+                ? '이미 QR 인증한 점포입니다. 다시 찍으면 이용내역에 방문이 추가되고, 방문당 리뷰는 1회입니다.'
+                : '지도 핀이 없는 내부 점포도 QR 인증과 마감할인 예약이 됩니다.',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 14),
+          if (onOpenStore != null && store.products.isNotEmpty) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onOpenStore,
+                child: const Text('가게·상품 자세히 보기'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onScanQr,
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+              label: Text(verified ? 'QR 다시 인증하기' : 'QR 인증하기'),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  void _update(Offset local) {
-    final center = const Offset(size / 2, size / 2);
-    final delta = local - center;
-    final max = size / 2 - 18;
-    final clamped = delta.distance <= max ? delta : delta / delta.distance * max;
-    onChanged(clamped / max);
+  static String _won(int v) {
+    final s = v.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      final left = s.length - i;
+      buf.write(s[i]);
+      if (left > 1 && left % 3 == 1) buf.write(',');
+    }
+    return '$buf' '원';
   }
 }
 
-class _JoystickPainter extends CustomPainter {
-  const _JoystickPainter(this.value);
-
-  final Offset value;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(c, size.width / 2, Paint()..color = const Color(0xCCFFFFFF));
-    canvas.drawCircle(
-      c,
-      size.width / 2,
-      Paint()
-        ..color = const Color(0x330B3A6A)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    canvas.drawCircle(
-      c + value * (size.width / 2 - 18),
-      22,
-      Paint()..color = AppColors.navy,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _JoystickPainter oldDelegate) =>
-      oldDelegate.value != value;
-}

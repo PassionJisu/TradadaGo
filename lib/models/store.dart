@@ -11,6 +11,7 @@ class Store {
     required this.position,
     required this.products,
     this.description = '',
+    this.requireGps = true,
   });
 
   final String id;
@@ -20,6 +21,7 @@ class Store {
   final NLatLng position;
   final String description;
   final List<Product> products;
+  final bool requireGps;
 
   String get qrPayload => 'TRADADAGO:$id';
 }

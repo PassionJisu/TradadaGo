@@ -60,26 +60,26 @@ class _QrScanScreenState extends State<QrScanScreen> {
 
   Future<void> _verify(String payload) async {
     if (_handled) return;
-    final nearby = LocationSession.instance.isNear(widget.store.position);
-    if (!nearby) {
-      setState(() => _hint = 'GPS가 가게에서 너무 멉니다. 시연 경로로 가까이 가주세요.');
-      return;
+    if (widget.store.requireGps) {
+      final nearby = LocationSession.instance.isNear(widget.store.position);
+      if (!nearby) {
+        setState(() => _hint = 'GPS가 가게에서 너무 멉니다. 시연 경로로 가까이 가주세요.');
+        return;
+      }
     }
     if (payload.trim() != widget.store.qrPayload) {
       setState(() => _hint = '이 가게 QR이 아닙니다. ${widget.store.qrPayload}');
       return;
     }
     _handled = true;
-    final grant = AppSession.instance.addVisitStamp(widget.store.id);
+    AppSession.instance.markQrVerified(widget.store);
     if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(grant.added ? '스탬프 획득!' : '오늘은 이미 찍었습니다'),
+        title: const Text('QR 인증 성공'),
         content: Text(
-          grant.added
-              ? '${widget.store.name} 스탬프가 나의 체크판에 찍혔습니다.\n${grant.message}'
-              : grant.message,
+          '${widget.store.name} 앞에서 인증되었습니다.\n리뷰는 이용내역에서 작성할 수 있습니다.',
         ),
         actions: [
           TextButton(
@@ -89,7 +89,8 @@ class _QrScanScreenState extends State<QrScanScreen> {
         ],
       ),
     );
-    if (mounted) Navigator.pop(context);
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   @override
@@ -153,10 +154,12 @@ class _QrScanScreenState extends State<QrScanScreen> {
                       ),
                     ),
                   ),
-                const Text(
-                  '돋보기 렌즈 안으로 QR을 맞추세요. GPS 근접 + QR 이중 인증.',
+                Text(
+                  widget.store.requireGps
+                      ? '돋보기 렌즈 안으로 QR을 맞추세요. GPS 근접 + QR 이중 인증.'
+                      : '돋보기 렌즈 안으로 QR을 맞추세요. 내부 지도 점포는 핀 없이 QR만 인증합니다.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF6B7280)),
+                  style: const TextStyle(color: Color(0xFF6B7280)),
                 ),
                 const SizedBox(height: 8),
                 Text(

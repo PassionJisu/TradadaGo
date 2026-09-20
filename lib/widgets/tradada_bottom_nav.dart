@@ -46,7 +46,7 @@ class TradadaBottomNav extends StatelessWidget {
           child: Row(
             children: [
               _item(Icons.home_rounded, '홈', 0),
-              _item(Icons.shopping_bag_outlined, '예약내역', 1),
+              _item(Icons.receipt_long_outlined, '이용내역', 1),
               const SizedBox(width: 76),
               _item(Icons.groups_outlined, '커뮤니티', 2),
               _item(Icons.person_outline_rounded, '마이페이지', 3),

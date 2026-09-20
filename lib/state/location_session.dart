@@ -12,6 +12,7 @@ class LocationSession extends ChangeNotifier {
 
   NLatLng? current;
   bool demoWalking = false;
+  bool demoPaused = false;
   bool usingGps = false;
   String? status;
 
@@ -75,6 +76,7 @@ class LocationSession extends ChangeNotifier {
   void startYangdongDemoWalk() {
     stopDemoWalk();
     demoWalking = true;
+    demoPaused = false;
     usingGps = false;
     _path = GwangjuMarkets.yangdongDemoPath;
     _pathIndex = 0;
@@ -84,9 +86,10 @@ class LocationSession extends ChangeNotifier {
     notifyListeners();
 
     _demoTimer = Timer.periodic(const Duration(milliseconds: 280), (_) {
-      if (!demoWalking || _path.isEmpty) return;
+      if (!demoWalking || demoPaused || _path.isEmpty) return;
       if (_pathIndex >= _path.length - 1) {
         demoWalking = false;
+        demoPaused = false;
         _demoTimer?.cancel();
         status = '시연 경로 도착';
         notifyListeners();
@@ -110,9 +113,24 @@ class LocationSession extends ChangeNotifier {
     });
   }
 
+  void pauseDemoWalk() {
+    if (!demoWalking || demoPaused) return;
+    demoPaused = true;
+    status = '시연 경로 일시정지';
+    notifyListeners();
+  }
+
+  void resumeDemoWalk() {
+    if (!demoWalking || !demoPaused) return;
+    demoPaused = false;
+    status = '양동시장 시연 경로 이동 중';
+    notifyListeners();
+  }
+
   void stopDemoWalk() {
     _demoTimer?.cancel();
     _demoTimer = null;
+    demoPaused = false;
     if (!demoWalking) return;
     demoWalking = false;
     notifyListeners();
@@ -163,7 +181,7 @@ class LocationSession extends ChangeNotifier {
     );
   }
 
-  bool isNear(NLatLng target, {double meters = 38}) {
+  bool isNear(NLatLng target, {double meters = 28}) {
     final d = metersTo(target);
     return d != null && d <= meters;
   }
