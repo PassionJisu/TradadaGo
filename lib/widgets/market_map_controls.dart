@@ -9,44 +9,71 @@ class PaintProgressBanner extends StatelessWidget {
     super.key,
     required this.painted,
     required this.total,
+    this.compact = false,
   });
 
   final int painted;
   final int total;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final ratio = total == 0 ? 0.0 : painted / total;
     final percent = (ratio * 100).round();
+    final bar = ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: LinearProgressIndicator(
+        value: ratio,
+        minHeight: compact ? 10 : 7,
+        backgroundColor: const Color(0xFFE6EDF4),
+        color: AppColors.goldDeep,
+      ),
+    );
     return Material(
       color: const Color(0xF2FFFFFF),
       borderRadius: BorderRadius.circular(14),
       elevation: 1,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '색칠 $percent%  ·  $painted/$total곳 리뷰',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                color: AppColors.navy,
+        padding: EdgeInsets.fromLTRB(12, compact ? 9 : 8, 12, compact ? 9 : 8),
+        child: compact
+            ? Row(
+                children: [
+                  Text(
+                    '색칠 $percent%',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: bar),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$painted/$total곳',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.deepBlue,
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '색칠 $percent%  ·  $painted/$total곳 리뷰',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  bar,
+                ],
               ),
-            ),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: ratio,
-                minHeight: 7,
-                backgroundColor: const Color(0xFFE6EDF4),
-                color: AppColors.goldDeep,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

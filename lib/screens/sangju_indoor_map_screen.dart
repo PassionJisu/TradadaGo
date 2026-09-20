@@ -292,7 +292,8 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
   Widget build(BuildContext context) {
     final data = _data;
     final camera = _camera;
-    final bottomClearance = MediaQuery.paddingOf(context).bottom + 72;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    const navClearance = 72.0;
     return ListenableBuilder(
       listenable: AppSession.instance,
       builder: (context, _) {
@@ -310,6 +311,10 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                 final origin = _locateStall != null && _homeFocus != null
                     ? camera.worldToScreen(_homeFocus!, viewport)
                     : camera.characterScreen(viewport);
+                final paintedIds = AppSession.instance.paintedStoreIds;
+                final painted = data.stalls
+                    .where((stall) => paintedIds.contains(stall.id))
+                    .length;
                 return Stack(
                   fit: StackFit.expand,
                   children: [
@@ -352,9 +357,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                               highlightId: _locateStall?.id ?? _nearby?.id,
                               floorFilter: _floor,
                               useFilter: _filterUse,
-                              visitedIds: Set<String>.of(
-                                AppSession.instance.paintedStoreIds,
-                              ),
+                              visitedIds: Set<String>.of(paintedIds),
                               pinIdle: StorePinImages.idle,
                               pinActive: StorePinImages.active,
                               rotation: camera.rotation,
@@ -364,18 +367,28 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                       ),
                     ),
                     _avatar(origin, camera),
-                    SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: EdgeInsets.only(bottom: bottomClearance),
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: SafeArea(
+                        bottom: false,
                         child: _hud(data, camera, viewport),
                       ),
                     ),
                     Positioned(
                       left: 16,
                       right: 16,
-                      bottom: bottomClearance,
+                      bottom: safeBottom + navClearance + 40,
                       child: _demoWalkBar(),
+                    ),
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: safeBottom + 64,
+                      child: PaintProgressBanner(
+                        painted: painted,
+                        total: data.stalls.length,
+                        compact: true,
+                      ),
                     ),
                   ],
                 );
@@ -528,6 +541,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Material(
             color: const Color(0xE6FFF8E8),
@@ -648,43 +662,6 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                 ),
               ),
             ),
-          const Spacer(),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Column(
-              children: [
-                _RoundCtrl(
-                  icon: Icons.add,
-                  onTap: () {
-                    camera.scale = math.min(
-                      IndoorCamera.maxScale,
-                      camera.scale * 1.18,
-                    );
-                    setState(() {});
-                  },
-                ),
-                const SizedBox(height: 8),
-                _RoundCtrl(
-                  icon: Icons.remove,
-                  onTap: () {
-                    camera.scale = math.max(
-                      camera.minScale(viewport),
-                      camera.scale / 1.18,
-                    );
-                    setState(() {});
-                  },
-                ),
-                const SizedBox(height: 8),
-                _RoundCtrl(
-                  icon: Icons.explore_outlined,
-                  onTap: () {
-                    camera.rotation = 0;
-                    setState(() {});
-                  },
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -779,22 +756,3 @@ class IndoorStallSheet extends StatelessWidget {
   }
 }
 
-class _RoundCtrl extends StatelessWidget {
-  const _RoundCtrl({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 3,
-      shape: const CircleBorder(),
-      child: IconButton(
-        onPressed: onTap,
-        icon: Icon(icon, color: AppColors.navy),
-      ),
-    );
-  }
-}

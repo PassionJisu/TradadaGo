@@ -256,6 +256,12 @@ void main() {
     expect(find.text('1층 선택'), findsOneWidget);
     expect(find.text('가게 정보 보기'), findsOneWidget);
     expect(find.text('골목 시연 걷기'), findsOneWidget);
+    expect(find.text('색칠 0%'), findsOneWidget);
+    expect(find.text('${0}/${data.stalls.length}곳'), findsOneWidget);
+    expect(find.byIcon(Icons.add), findsNothing);
+    expect(find.byIcon(Icons.remove), findsNothing);
+    expect(find.byIcon(Icons.explore_outlined), findsNothing);
+    expect(find.byIcon(Icons.my_location_rounded), findsNothing);
 
     await tester.tap(find.text('골목 시연 걷기'));
     await tester.pump();
@@ -273,19 +279,7 @@ void main() {
     await tester.tap(find.text('시연 경로 정지'));
     await tester.pump();
     expect(find.text('골목 시연 걷기'), findsOneWidget);
-
-    final start = tester.widget<Image>(find.byKey(const Key('indoor-avatar')));
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-    final zoomedIn = tester.widget<Image>(find.byKey(const Key('indoor-avatar')));
-    expect(zoomedIn.width!, greaterThan(start.width!));
-
-    await tester.tap(find.byIcon(Icons.remove));
-    await tester.pump();
-    await tester.tap(find.byIcon(Icons.remove));
-    await tester.pump();
-    final zoomedOut = tester.widget<Image>(find.byKey(const Key('indoor-avatar')));
-    expect(zoomedOut.width!, lessThan(start.width!));
+    expect(find.text('색칠 0%'), findsOneWidget);
   });
 
   testWidgets('indoor stall sheet offers QR without a map pin', (tester) async {
