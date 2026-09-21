@@ -17,7 +17,19 @@
 6. **마이페이지 체크판** — 5×6 광주 우표 보드, 한 줄 완성 시 강조, 우표 탭 시 명소 사진
 7. **예약내역** — 마감할인 픽업 예약 목록
 
-## 실행 방법
+## GitHub에서 시연하기
+
+브라우저에서 앱을 바로 켤 수는 없습니다. 네이버맵 모바일 SDK라 Android 폰(또는 에뮬레이터)이 필요합니다.
+
+대신 GitHub Actions가 시연용 APK를 만들어 둡니다.
+
+1. [Releases · 시연 APK](https://github.com/PassionJisu/TradadaGo/releases/tag/demo)에서 `tradada-go.apk`를 받습니다.
+2. Android 폰에 설치합니다. (알 수 없는 출처 허용)
+3. 아이디 `admin` / 비밀번호 `tradada123`으로 들어갑니다.
+
+아직 Release가 없으면 레포 **Actions → 시연 APK → Run workflow**를 한 번 실행한 뒤, 같은 페이지의 Artifacts에서 APK를 받아도 됩니다.
+
+## 실행 방법 (로컬)
 
 Android 에뮬레이터에서 실행합니다. 네이버맵 모바일 SDK라 Windows/Chrome에서는 지도가 뜨지 않습니다.
 

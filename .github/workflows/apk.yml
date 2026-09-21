@@ -1,0 +1,45 @@
+name: 시연 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, sub]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build apk --debug
+      - run: cp build/app/outputs/flutter-apk/app-debug.apk tradada-go.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tradada-go
+          path: tradada-go.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: demo
+          name: 시연 APK
+          prerelease: true
+          make_latest: false
+          files: tradada-go.apk
+          body: |
+            Android에 설치한 뒤 아이디 `admin` / 비밀번호 `tradada123`으로 들어가세요.
+            네이버맵이라 PC 브라우저에서는 실행되지 않습니다.
