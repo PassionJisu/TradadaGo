@@ -24,9 +24,8 @@ class StoreDetailScreen extends StatelessWidget {
       listenable: AppSession.instance,
       builder: (context, _) {
         final nearby = LocationSession.instance.isNear(store.position);
-        final reserved = AppSession.instance.activeReservation(store.id) != null;
         final atStore = !store.requireGps || nearby;
-        final canScan = reserved && atStore;
+        final canScan = atStore;
         final stampedToday =
             AppSession.instance.hasVisitStampToday(store.id);
         final painted = AppSession.instance.hasPainted(store.id);
@@ -128,11 +127,7 @@ class StoreDetailScreen extends StatelessWidget {
                 : null,
             icon: const Icon(Icons.qr_code_scanner_rounded),
             label: Text(
-              canScan
-                  ? 'QR 인증하기'
-                  : reserved
-                      ? '가게 앞에서만 QR 인증이 됩니다'
-                      : '예약 후 QR 인증이 됩니다',
+              canScan ? 'QR 인증하기' : '가게 앞에서만 QR 인증이 됩니다',
             ),
           ),
           const SizedBox(height: 10),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../data/market_demo_shops.dart';
 import '../models/store.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
@@ -22,18 +21,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   final _body = TextEditingController();
   String? _photo;
 
-  List<String> get _demoPhotos {
-    final eaten = widget.store.products
-        .map((product) => product.reviewImageAsset)
-        .whereType<String>();
-    final fallback = eaten.isEmpty
-        ? widget.store.products
-            .map((product) => product.imageAsset)
-            .whereType<String>()
-        : eaten;
-    return {...fallback, ...MarketDemoShops.reviewPhotos}.toList();
-  }
-
   Future<void> _attach(ImageSource source) async {
     try {
       final file = await ImagePicker().pickImage(
@@ -45,7 +32,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       setState(() => _photo = file.path);
     } catch (_) {
       if (!mounted) return;
-      showAppNotice(context, '사진을 불러오지 못했습니다. 시연용 사진을 선택해도 됩니다.');
+      showAppNotice(context, '사진을 불러오지 못했습니다.');
     }
   }
 
@@ -89,7 +76,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
   Future<void> _submit() async {
     if (_photo == null) {
-      await showAppNotice(context, '포토 리뷰만 가능합니다. 사진을 첨부해주세요.');
+      await showAppNotice(context, '사진을 첨부해주세요.');
       return;
     }
     if (_body.text.trim().length < 8) {
@@ -127,38 +114,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           ),
           const SizedBox(height: 6),
           _EatenFoods(storeId: widget.store.id, visitId: widget.visitId),
-          const SizedBox(height: 8),
-          const Text('사진은 필수입니다. 위 메뉴가 먹은 음식으로 리뷰에 함께 기록됩니다.'),
           const SizedBox(height: 14),
-          if (_demoPhotos.isNotEmpty)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final asset in _demoPhotos)
-                  GestureDetector(
-                    onTap: () => setState(() => _photo = asset),
-                    child: Container(
-                      width: 96,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _photo == asset
-                              ? AppColors.goldDeep
-                              : const Color(0xFFE5E7EB),
-                          width: 3,
-                        ),
-                        image: DecorationImage(
-                          image: AssetImage(asset),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          const SizedBox(height: 10),
           OutlinedButton.icon(
             onPressed: _chooseSource,
             icon: const Icon(Icons.add_a_photo_outlined),
@@ -172,19 +128,20 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
             ),
           ],
           const SizedBox(height: 6),
-          Text(
-            _photo == null ? '시연용 사진을 고르거나 직접 첨부하세요.' : '사진이 첨부되었습니다.',
-            style: TextStyle(
-              color: _photo == null ? AppColors.pinRed : AppColors.teal,
-              fontWeight: FontWeight.w700,
+          if (_photo != null)
+            const Text(
+              '사진이 첨부되었습니다.',
+              style: TextStyle(
+                color: AppColors.teal,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
           const SizedBox(height: 14),
           TextField(
             controller: _body,
             maxLines: 5,
             decoration: InputDecoration(
-              hintText: '오늘 픽업한 맛을 남겨주세요.',
+              hintText: '오늘 먹은 맛을 남겨주세요.',
               filled: true,
               fillColor: Colors.white,
               border: OutlineInputBorder(
@@ -196,7 +153,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _submit,
-            child: const Text('리뷰 올리고 방문 완료하기'),
+            child: const Text('리뷰 올리기'),
           ),
         ],
       ),
@@ -223,12 +180,7 @@ class _EatenFoods extends StatelessWidget {
       }
     }
     final foods = visit?.eatenFoods ?? const <String>[];
-    if (foods.isEmpty) {
-      return const Text(
-        '예약한 뒤 QR로 수령한 메뉴가 없습니다.',
-        style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.pinRed),
-      );
-    }
+    if (foods.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

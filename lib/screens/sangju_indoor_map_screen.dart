@@ -272,10 +272,6 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
       showAppNotice(context, '가게 앞에서만 QR 인증이 됩니다.');
       return;
     }
-    if (AppSession.instance.activeReservation(stall.id) == null) {
-      showAppNotice(context, '이 식당을 먼저 예약한 뒤 QR을 인증할 수 있습니다.');
-      return;
-    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => QrScanScreen(store: stall.asStore(qrUnlocked: true)),
@@ -877,10 +873,10 @@ class IndoorStallSheet extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               verified
-                  ? '이전에 수령한 식당입니다. 다시 먹으려면 메뉴를 새로 예약하세요.'
+                  ? 'QR로 방문한 식당입니다. 포토 리뷰를 남기면 스탬프가 하나 더 생깁니다.'
                   : qrEnabled
-                      ? '식당 앞입니다. 메뉴를 예약한 뒤에만 QR 인증과 리뷰가 됩니다.'
-                      : '가게 앞에서만 QR 인증이 됩니다. 예약은 미리 할 수 있습니다.',
+                      ? '식당 앞입니다. 예약 없이도 QR 인증이 됩니다.'
+                      : '가게 앞에서만 QR 인증이 됩니다. 예약은 선택입니다.',
               style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 14),

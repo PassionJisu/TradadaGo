@@ -41,8 +41,11 @@ class Reservation {
 
   int get price => items.fold(0, (sum, item) => sum + item.linePrice);
 
-  String get productName =>
-      items.isEmpty ? '예약 메뉴 없음' : items.map((item) => item.label).join(', ');
+  bool get isWalkIn => items.isEmpty;
+
+  String get productName => isWalkIn
+      ? '현장 방문'
+      : items.map((item) => item.label).join(', ');
 
   List<String> get eatenFoods => [for (final item in items) item.label];
 

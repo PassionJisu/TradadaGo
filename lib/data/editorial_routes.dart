@@ -11,7 +11,7 @@ abstract final class EditorialRoutes {
       distance: '800m',
       coverAsset: AppAssets.foodGimbap,
       summary:
-          '광주의 부엌 양동시장을 홍어부터 군밤까지 한 바퀴. 마감할인 픽업 창구를 따라가면 걸음마다 스탬프가 쌓입니다.',
+          '광주의 부엌 양동시장을 홍어부터 군밤까지 한 바퀴. 예약 픽업과 현장 결제 모두, 가게 앞에서 QR하면 방문 스탬프 1개입니다. 칭호는 처음 가는 가게만 세고, 포토 리뷰는 보너스 스탬프입니다.',
       stops: [
         EditorialStop(name: '양동홍어타운', note: '홍어모둠으로 입맛 열기'),
         EditorialStop(name: '천변국밥', note: '점심 국밥 마감팩'),
@@ -27,7 +27,7 @@ abstract final class EditorialRoutes {
       distance: '600m',
       coverAsset: AppAssets.skyHeader,
       summary:
-          '당일 남은 제철 과일과 생선, 떡을 저녁 전에 모아 담는 루트. 폐기 직전 상품을 여행 기념품처럼 챙깁니다.',
+          '당일 남은 제철 과일과 생선, 떡을 저녁 전에 모아 담는 루트. 미리 예약하거나, 좌판에서 바로 결제해도 가게 앞 QR로 인증합니다.',
       stops: [
         EditorialStop(name: '햇살과일', note: '제철과일 2kg 모음'),
         EditorialStop(name: '싱싱수산', note: '고등어·갈치 구이세트'),
@@ -42,12 +42,12 @@ abstract final class EditorialRoutes {
       distance: '시장 3곳',
       coverAsset: AppAssets.landmarkChungjang,
       summary:
-          '양동에서 시작해 대인·시장 데모까지. 양동은 조감도, 시장 데모는 내부 지도로 입장할 수 있습니다.',
+          '양동시장은 조감도, 시장 데모는 내부 지도로 들어갑니다. 대인시장 내부와 충장로 입장 지도는 아직 없습니다. 충장로는 스탬프 보드의 명소입니다.',
       stops: [
-        EditorialStop(name: '양동시장', note: '조감도 입장 · 스탬프'),
-        EditorialStop(name: '대인시장', note: '야시장 골목 예습'),
-        EditorialStop(name: '시장 데모', note: '내부 지도 시연'),
-        EditorialStop(name: '충장로', note: '번화가에서 하루 마무리'),
+        EditorialStop(name: '양동시장', note: '조감도로 입장 · 가게 앞 QR'),
+        EditorialStop(name: '대인시장', note: '위치만 있음 · 내부는 다음 단계'),
+        EditorialStop(name: '시장 데모', note: '1층 식당 내부 지도'),
+        EditorialStop(name: '충장로', note: '입장 지도 없음 · 우표 명소'),
       ],
     ),
     EditorialRoute(
@@ -58,11 +58,11 @@ abstract final class EditorialRoutes {
       distance: '도보+시장',
       coverAsset: AppAssets.landmarkYangnim,
       summary:
-          '호랑가시나무 마을을 둘러본 뒤 양동시장에서 마감할인을 픽업하는 여행 루트. 스탬프 보드의 양림동 우표와 이어집니다.',
+          '양림동과 5·18민주광장은 스탬프 보드의 광주 명소입니다. 루트를 걷는다고 그 우표가 바로 찍히지는 않고, 가게 스탬프는 양동시장 가게 앞 QR로 받습니다.',
       stops: [
-        EditorialStop(name: '양림동', note: '근대 골목 산책'),
-        EditorialStop(name: '양동시장', note: '고운한복 · 떡집'),
-        EditorialStop(name: '5·18민주광장', note: '광주의 기억'),
+        EditorialStop(name: '양림동', note: '근대 골목 · 우표 명소'),
+        EditorialStop(name: '양동시장', note: '고운한복 · 양동떡집 · 가게 QR'),
+        EditorialStop(name: '5·18민주광장', note: '역사 명소 · 입장 지도 없음'),
       ],
     ),
   ];

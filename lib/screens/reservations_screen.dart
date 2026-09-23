@@ -36,7 +36,7 @@ class ReservationsScreen extends StatelessWidget {
                 const Expanded(
                   child: Center(
                     child: Text(
-                      '아직 이용 내역이 없습니다.\n식당 메뉴를 예약한 뒤, 가게 앞에서 QR로 수령하세요.',
+                      '아직 이용 내역이 없습니다.\n가게 앞에서 QR 인증을 하거나, 메뉴를 예약하세요.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Color(0xFF6B7280)),
                     ),
@@ -92,9 +92,11 @@ class ReservationsScreen extends StatelessWidget {
                                       Text(r.productName),
                                       const SizedBox(height: 6),
                                       Text(
-                                        r.isQrVisit
-                                            ? '${_won(r.price)} · QR 수령 완료'
-                                            : '${_won(r.price)} · 예약됨',
+                                        r.isWalkIn
+                                            ? '현장 방문 · QR 인증'
+                                            : r.isQrVisit
+                                                ? '${_won(r.price)} · QR 수령 완료'
+                                                : '${_won(r.price)} · 예약됨',
                                         style: const TextStyle(
                                           color: AppColors.pinRed,
                                           fontWeight: FontWeight.w800,
@@ -153,7 +155,7 @@ class ReservationsScreen extends StatelessWidget {
                                         )
                                       else if (r.isQrVisit)
                                         const Text(
-                                          '예약한 메뉴를 가게 앞에서 QR로 수령하면 리뷰를 1회 작성할 수 있습니다.',
+                                          'QR 인증 후 포토 리뷰를 한 번 남길 수 있습니다.',
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,

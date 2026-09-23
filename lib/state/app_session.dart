@@ -145,14 +145,39 @@ class AppSession extends ChangeNotifier {
   bool canWriteReviewFor(Reservation item) =>
       item.isQrVisit && !item.hasReview;
 
-  /// 예약이 있을 때만 수령 인증으로 바꾼다. 예약 없이 방문 기록을 만들지 않는다.
-  bool markQrVerified(Store store) {
-    final reservation = activeReservation(store.id);
-    if (reservation == null) return false;
-    reservation.status = ReservationStatus.visited;
+  /// 가게 앞 QR. 예약이 있으면 그 메뉴를 수령으로 바꾸고, 없으면 현장 방문으로 남긴다.
+  StampGrant markQrVerified(Store store) {
+    final open = activeReservation(store.id);
+    final hadReservation = open != null;
+    if (open != null) {
+      open.status = ReservationStatus.visited;
+    } else if (unreviewedQrVisit(store.id) == null) {
+      reservations.insert(
+        0,
+        Reservation(
+          id: 'visit-${DateTime.now().microsecondsSinceEpoch}',
+          storeId: store.id,
+          storeName: store.name,
+          items: const [],
+          createdAt: DateTime.now(),
+          status: ReservationStatus.visited,
+        ),
+      );
+    }
     qrVerifiedStoreIds.add(store.id);
-    notifyListeners();
-    return true;
+    final grant = addVisitStamp(store.id);
+    if (!grant.added) {
+      notifyListeners();
+      return grant;
+    }
+    if (grant.unlockedTitle != null) return grant;
+    return StampGrant(
+      added: true,
+      message: hadReservation
+          ? '예약 메뉴를 수령했습니다. 방문 스탬프 1개가 찍혔습니다.'
+          : '현장 방문이 인증되었습니다. 방문 스탬프 1개가 찍혔습니다.',
+      unlockedTitle: grant.unlockedTitle,
+    );
   }
 
   StampGrant addDemoVisitStamp() {
@@ -189,15 +214,15 @@ class AppSession extends ChangeNotifier {
         message: '이 가게 스탬프는 하루에 1회만 받을 수 있습니다.',
       );
     }
+    final firstVisit = uniqueVisitStoreIds.add(storeId);
     lastVisitStampAt[storeId] = DateTime.now();
-    uniqueVisitStoreIds.add(storeId);
     _appendStamp(source: 'visit');
-    final title = _unlockTitles();
+    final title = firstVisit ? _unlockTitles() : null;
     notifyListeners();
     return StampGrant(
       added: true,
       message: title == null
-          ? '방문 스탬프가 체크판에 찍혔습니다.'
+          ? '방문 스탬프가 체크판에 찍혔습니다. 칭호는 처음 가는 가게만 셉니다.'
           : '${title.korean}(${title.english}) 칭호와 상품권이 지급되었습니다.',
       unlockedTitle: title,
     );
@@ -299,7 +324,7 @@ class AppSession extends ChangeNotifier {
     if (visit == null || visit.hasReview) {
       return const StampGrant(
         added: false,
-        message: '예약한 뒤 QR로 수령 인증한 식당만 리뷰를 남길 수 있습니다.',
+        message: '가게 앞에서 QR 인증한 식당만 리뷰를 남길 수 있습니다.',
       );
     }
 
@@ -317,27 +342,7 @@ class AppSession extends ChangeNotifier {
     reviews.insert(0, review);
     visit.reviewId = review.id;
     qrVerifiedStoreIds.add(store.id);
-    StampGrant grant;
-    if (!hasEverVisited(store.id) || !hasVisitStampToday(store.id)) {
-      lastVisitStampAt[store.id] = DateTime.now();
-      uniqueVisitStoreIds.add(store.id);
-      _appendStamp(source: 'visit');
-      final title = _unlockTitles();
-      grant = StampGrant(
-        added: true,
-        message: title == null
-            ? '리뷰가 등록되어 방문 완료 · 스탬프 · 지도 색칠이 반영되었습니다.'
-            : '${title.korean}(${title.english}) 칭호와 상품권이 지급되었습니다.',
-        unlockedTitle: title,
-      );
-    } else {
-      grant = const StampGrant(
-        added: false,
-        message: '리뷰가 등록되어 지도에 색칠되었습니다. 오늘 스탬프는 이미 받았습니다.',
-      );
-    }
-    notifyListeners();
-    return grant;
+    return addReviewBonusStamp();
   }
 
   List<Review> weeklyRanking() {

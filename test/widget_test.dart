@@ -114,9 +114,9 @@ void main() {
   testWidgets('QR visit appears in usage history with review', (tester) async {
     final store = GwangjuMarkets.yangdong.stores.first;
     _reserve(store);
-    expect(AppSession.instance.markQrVerified(store), isTrue);
+    expect(AppSession.instance.markQrVerified(store).added, isTrue);
     _reserve(store);
-    expect(AppSession.instance.markQrVerified(store), isTrue);
+    expect(AppSession.instance.markQrVerified(store).added, isFalse);
 
     await tester.pumpWidget(const MaterialApp(home: ReservationsScreen()));
     expect(find.text('이용내역'), findsOneWidget);
@@ -132,7 +132,7 @@ void main() {
   testWidgets('usage history opens a written review', (tester) async {
     final store = GwangjuMarkets.yangdong.stores.first;
     _reserve(store);
-    expect(AppSession.instance.markQrVerified(store), isTrue);
+    AppSession.instance.markQrVerified(store);
     final visit = AppSession.instance.unreviewedQrVisit(store.id)!;
     AppSession.instance.addPhotoReview(
       store: store,

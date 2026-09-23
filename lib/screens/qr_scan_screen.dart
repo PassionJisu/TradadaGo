@@ -36,20 +36,14 @@ class _QrScanScreenState extends State<QrScanScreen> {
       setState(() => _hint = '이 가게 QR이 아닙니다. ${widget.store.qrPayload}');
       return;
     }
-    final ok = AppSession.instance.markQrVerified(widget.store);
-    if (!ok) {
-      setState(() => _hint = '이 식당을 먼저 예약한 뒤 QR을 인증할 수 있습니다.');
-      return;
-    }
+    final grant = AppSession.instance.markQrVerified(widget.store);
     _handled = true;
     if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('QR 인증 성공'),
-        content: Text(
-          '${widget.store.name} 예약 메뉴를 수령했습니다.\n먹은 음식은 이용내역 리뷰에 함께 기록됩니다.',
-        ),
+        content: Text('${widget.store.name}\n${grant.message}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
