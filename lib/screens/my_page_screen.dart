@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../data/gwangju_landmarks.dart';
 import '../models/title_tier.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 import '../util/money.dart';
+import '../widgets/stamp_board.dart';
 import 'completed_maps_screen.dart';
 import 'inquiry_screen.dart';
 import 'login_screen.dart';
@@ -41,7 +41,7 @@ class MyPageScreen extends StatelessWidget {
                 const SizedBox(height: 14),
                 const CompletedMarketMapCard(),
                 const SizedBox(height: 14),
-                _StampBoard(session: s),
+                StampBoard(session: s),
                 const SizedBox(height: 14),
                 _DemoStampCard(session: s),
                 if (s.voucherLog.isNotEmpty) ...[
@@ -318,142 +318,3 @@ class _TitleCard extends StatelessWidget {
   }
 }
 
-class _StampBoard extends StatelessWidget {
-  const _StampBoard({required this.session});
-  final AppSession session;
-
-  @override
-  Widget build(BuildContext context) {
-    final start = session.boardIndex * AppSession.boardSize;
-    final cells = List<int>.generate(AppSession.boardSize, (i) => start + i);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '나의 체크판 · ${session.boardIndex + 1}번째 보드',
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-              color: AppColors.navy,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '광주 우표 스탬프 ${session.boardFillCount}/${AppSession.boardSize} · 30칸이 차면 다음 보드',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: AppSession.boardSize,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: AppSession.columns,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-            ),
-            itemBuilder: (context, i) {
-              final stampIndex = cells[i];
-              final filled = stampIndex < session.stamps.length;
-              final rowStart = (i ~/ AppSession.columns) * AppSession.columns;
-              final rowFilled = List.generate(AppSession.columns, (c) {
-                return cells[rowStart + c] < session.stamps.length;
-              }).every((e) => e);
-              return GestureDetector(
-                onTap: filled
-                    ? () => _openStamp(context, stampIndex)
-                    : null,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  decoration: BoxDecoration(
-                    color: filled
-                        ? (rowFilled
-                            ? const Color(0xFFFFF3B0)
-                            : const Color(0xFFFFF8E8))
-                        : const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: filled
-                          ? (rowFilled ? AppColors.goldDeep : AppColors.navy)
-                          : const Color(0xFFE5E7EB),
-                      width: 1.4,
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(3),
-                  child: filled
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(7),
-                          child: Image.asset(
-                            GwangjuLandmarks.byId(
-                              session.stamps[stampIndex].landmarkId,
-                            ).photoAsset,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : const Center(
-                          child: Text(
-                            '+',
-                            style: TextStyle(
-                              color: Color(0xFF9AA3AF),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openStamp(BuildContext context, int stampIndex) {
-    final stamp = session.stamps[stampIndex];
-    final landmark = GwangjuLandmarks.byId(stamp.landmarkId);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(landmark.name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(landmark.photoAsset),
-            ),
-            const SizedBox(height: 10),
-            Text(landmark.blurb),
-            const SizedBox(height: 6),
-            Text(
-              '출처: ${_sourceLabel(stamp.source)}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('닫기'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _sourceLabel(String source) {
-    return switch (source) {
-      'visit' => '가게 방문 QR',
-      'review' => '포토 리뷰 보너스',
-      'recommend' => '추천 10회 보너스',
-      _ => source,
-    };
-  }
-}

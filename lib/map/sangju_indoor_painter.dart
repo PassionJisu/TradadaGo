@@ -17,6 +17,10 @@ class SangjuIndoorPainter extends CustomPainter {
     required this.scale,
     required this.matrix,
     this.highlightId,
+    this.routeId,
+    this.activePinId,
+    this.guide = const [],
+    this.backdrop,
     this.floorFilter,
     this.useFilter,
     this.visitedIds = const {},
@@ -33,6 +37,10 @@ class SangjuIndoorPainter extends CustomPainter {
   final double scale;
   final Matrix4 matrix;
   final String? highlightId;
+  final String? routeId;
+  final String? activePinId;
+  final List<Offset> guide;
+  final IndoorMapBackdrop? backdrop;
   final int? floorFilter;
   final StallUse? useFilter;
   final Set<String> visitedIds;
@@ -42,6 +50,16 @@ class SangjuIndoorPainter extends CustomPainter {
   final ui.Image? pinActive;
   final double rotation;
 
+  int get _staticSignature => Object.hash(
+        floorFilter,
+        useFilter,
+        (scale * 20).round(),
+        (rotation * 100).round(),
+        clipToMarket,
+        stalls.length,
+        Object.hashAll(visitedIds),
+      );
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
@@ -49,12 +67,23 @@ class SangjuIndoorPainter extends CustomPainter {
     if (clipToMarket) {
       canvas.clipRect(Rect.fromLTWH(pad, pad, mapSize.width, mapSize.height));
     }
+    final cache = backdrop;
+    if (cache == null) {
+      _paintStatic(canvas);
+    } else {
+      cache.draw(canvas, _staticSignature, _paintStatic);
+    }
+    _paintDynamic(canvas);
+    canvas.restore();
+  }
 
+  void _paintStatic(Canvas canvas) {
     final world = Size(mapSize.width + pad * 2, mapSize.height + pad * 2);
     if (!clipToMarket) {
-      final grass = Paint()..color = const Color(0xFF8FCB5A);
-      canvas.drawRect(Offset.zero & world, grass);
-      _drawGroundPattern(canvas, world);
+      canvas.drawRect(
+        Offset.zero & world,
+        Paint()..color = const Color(0xFF8FCB5A),
+      );
     } else {
       canvas.drawRect(
         Rect.fromLTWH(pad, pad, mapSize.width, mapSize.height),
@@ -72,11 +101,9 @@ class SangjuIndoorPainter extends CustomPainter {
       RRect.fromRectAndRadius(market, const Radius.circular(28)),
       Paint()..color = const Color(0xFFD9D3C6),
     );
-
-    final alley = Paint()..color = const Color(0xFFC5BDB0);
     canvas.drawRRect(
       RRect.fromRectAndRadius(market.deflate(18), const Radius.circular(18)),
-      alley,
+      Paint()..color = const Color(0xFFC5BDB0),
     );
 
     for (final stall in stalls) {
@@ -84,7 +111,7 @@ class SangjuIndoorPainter extends CustomPainter {
       _drawStall(
         canvas,
         stall,
-        stall.id == highlightId,
+        false,
         faded: useFilter != null && stall.use != useFilter,
         visited: visitedIds.contains(stall.id),
       );
@@ -113,23 +140,60 @@ class SangjuIndoorPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    _drawUpright(canvas, Offset(pad + mapSize.width / 2, pad + mapSize.height - 24), () {
-      gate.paint(canvas, Offset(-gate.width / 2, -gate.height / 2));
-    });
-    _drawDiscountPins(canvas);
-    canvas.restore();
+    _drawUpright(
+      canvas,
+      Offset(pad + mapSize.width / 2, pad + mapSize.height - 24),
+      () {
+        gate.paint(canvas, Offset(-gate.width / 2, -gate.height / 2));
+      },
+    );
   }
 
-  void _drawGroundPattern(Canvas canvas, Size size) {
-    final line = Paint()
-      ..color = const Color(0x3380B34A)
-      ..strokeWidth = 8;
-    for (var x = 0.0; x < size.width; x += 140) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
+  void _paintDynamic(Canvas canvas) {
+    for (final stall in stalls) {
+      if (floorFilter != null && stall.floor != floorFilter) continue;
+      final marked = stall.id == highlightId || stall.id == routeId;
+      if (!marked) continue;
+      _drawStall(
+        canvas,
+        stall,
+        true,
+        faded: false,
+        visited: visitedIds.contains(stall.id),
+        overlay: true,
+      );
     }
-    for (var y = 0.0; y < size.height; y += 140) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
+    _drawGuide(canvas);
+    _drawDiscountPins(canvas);
+  }
+
+  void _drawGuide(Canvas canvas) {
+    if (guide.length < 2) return;
+    final path = Path()..moveTo(guide.first.dx, guide.first.dy);
+    for (final point in guide.skip(1)) {
+      path.lineTo(point.dx, point.dy);
     }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = AppColors.goldDeep
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    final end = guide.last;
+    canvas.drawCircle(end, 10, Paint()..color = AppColors.goldDeep);
+    canvas.drawCircle(end, 5, Paint()..color = Colors.white);
   }
 
   static List<IndoorStall> pickLabels(List<IndoorStall> stalls, double scale) {
@@ -176,13 +240,14 @@ class SangjuIndoorPainter extends CustomPainter {
     bool highlight, {
     required bool faded,
     required bool visited,
+    bool overlay = false,
   }) {
     const unvisited = Color(0xFFFFFFFF);
     var fill = visited
         ? (stall.floor == 2 ? const Color(0xFFC9B8D9) : stall.use.color)
         : unvisited;
     if (faded) fill = fill.withValues(alpha: visited ? 0.28 : 0.7);
-    canvas.drawPath(stall.path, Paint()..color = fill);
+    if (!overlay) canvas.drawPath(stall.path, Paint()..color = fill);
     canvas.drawPath(
       stall.path,
       Paint()
@@ -242,35 +307,14 @@ class SangjuIndoorPainter extends CustomPainter {
     int? floorFilter,
     StallUse? useFilter,
   }) {
-    final ranked = [
+    if (scale <= 0) return const [];
+    return [
       for (final stall in stalls)
         if ((floorFilter == null || stall.floor == floorFilter) &&
             (useFilter == null || stall.use == useFilter) &&
             stall.hasDiscountProducts)
           stall,
-    ]..sort((a, b) {
-        final aa = a.bounds.width * a.bounds.height;
-        final ba = b.bounds.width * b.bounds.height;
-        return ba.compareTo(aa);
-      });
-    final seen = <String>{};
-    final occupied = <Rect>[];
-    final kept = <IndoorStall>[];
-    final pinH = 32 / math.max(scale, 0.08);
-    final pinW = pinH * 0.72;
-    for (final stall in ranked) {
-      if (!seen.add(stall.name)) continue;
-      final center = stall.bounds.center;
-      final rect = Rect.fromCenter(
-        center: Offset(center.dx, center.dy - pinH * 0.35),
-        width: pinW,
-        height: pinH,
-      ).inflate(3);
-      if (occupied.any((placed) => placed.overlaps(rect))) continue;
-      occupied.add(rect);
-      kept.add(stall);
-    }
-    return kept;
+    ];
   }
 
   void _drawDiscountPins(Canvas canvas) {
@@ -282,7 +326,7 @@ class SangjuIndoorPainter extends CustomPainter {
       useFilter: useFilter,
     );
     for (final stall in pins) {
-      final highlight = stall.id == highlightId;
+      final highlight = stall.id == activePinId;
       final pinH = (highlight ? 38 : 32) / math.max(scale, 0.08);
       final image = highlight && pinActive != null ? pinActive : pinIdle;
       final aspect = image == null ? 0.72 : image.width / image.height;
@@ -295,7 +339,7 @@ class SangjuIndoorPainter extends CustomPainter {
             image,
             Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
             dst,
-            Paint()..filterQuality = FilterQuality.high,
+            Paint()..filterQuality = FilterQuality.low,
           );
         } else {
           _drawFallbackPin(canvas, dst, highlight);
@@ -330,6 +374,9 @@ class SangjuIndoorPainter extends CustomPainter {
   bool shouldRepaint(covariant SangjuIndoorPainter oldDelegate) {
     return oldDelegate.scale != scale ||
         oldDelegate.highlightId != highlightId ||
+        oldDelegate.routeId != routeId ||
+        oldDelegate.activePinId != activePinId ||
+        !listEquals(oldDelegate.guide, guide) ||
         oldDelegate.matrix != matrix ||
         oldDelegate.floorFilter != floorFilter ||
         oldDelegate.useFilter != useFilter ||
@@ -340,5 +387,28 @@ class SangjuIndoorPainter extends CustomPainter {
         oldDelegate.pinIdle != pinIdle ||
         oldDelegate.pinActive != pinActive ||
         oldDelegate.rotation != rotation;
+  }
+}
+
+/// 골목·점포처럼 자주 안 바뀌는 그림을 한 번만 기록한다.
+class IndoorMapBackdrop {
+  ui.Picture? _picture;
+  int? _key;
+
+  void dispose() {
+    _picture?.dispose();
+    _picture = null;
+    _key = null;
+  }
+
+  void draw(Canvas canvas, int signature, void Function(Canvas canvas) paint) {
+    if (_picture == null || _key != signature) {
+      _picture?.dispose();
+      final recorder = ui.PictureRecorder();
+      paint(Canvas(recorder));
+      _picture = recorder.endRecording();
+      _key = signature;
+    }
+    canvas.drawPicture(_picture!);
   }
 }

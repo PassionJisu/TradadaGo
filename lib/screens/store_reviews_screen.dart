@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/gwangju_markets.dart';
+import '../data/sangju_indoor_map.dart';
 import '../models/store.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
@@ -8,14 +9,37 @@ import '../util/app_notice.dart';
 import '../widgets/review_card.dart';
 import 'store_detail_screen.dart';
 
-void openStoreReviews(BuildContext context, String storeId) {
-  final store = GwangjuMarkets.storeById(storeId);
+Future<Store?> lookupStore(String storeId) async {
+  final known = GwangjuMarkets.storeById(storeId);
+  if (known != null) return known;
+  final map = await SangjuIndoorMap.load();
+  for (final stall in map.stalls) {
+    if (stall.id == storeId) return stall.asStore();
+  }
+  return null;
+}
+
+Future<void> openStoreReviews(BuildContext context, String storeId) async {
+  final store = await lookupStore(storeId);
+  if (!context.mounted) return;
   if (store == null) {
     showAppNotice(context, '가게 정보를 찾을 수 없습니다.');
     return;
   }
   Navigator.of(context).push(
     MaterialPageRoute(builder: (_) => StoreReviewsScreen(store: store)),
+  );
+}
+
+Future<void> openStoreDetail(BuildContext context, String storeId) async {
+  final store = await lookupStore(storeId);
+  if (!context.mounted) return;
+  if (store == null) {
+    showAppNotice(context, '가게 정보를 찾을 수 없습니다.');
+    return;
+  }
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => StoreDetailScreen(store: store)),
   );
 }
 
@@ -59,7 +83,7 @@ class StoreReviewsScreen extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: () => _openStoreDetail(context),
                   icon: const Icon(Icons.storefront_rounded),
-                  label: const Text('가게로 이동'),
+                  label: const Text('식당으로 이동'),
                 ),
               ),
               const SizedBox(height: 16),

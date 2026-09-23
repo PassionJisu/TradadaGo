@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:foodridge/config/assets.dart';
+import 'package:foodridge/map/alley_route.dart';
 import 'package:foodridge/data/sangju_floor2.dart';
 import 'package:foodridge/data/sangju_indoor_map.dart';
 import 'package:foodridge/map/indoor_camera.dart';
@@ -108,32 +110,46 @@ void main() {
     expect(walker.position.dx, greaterThan(pausedAt.dx));
   });
 
-  test('indoor stall QR does not require a map pin', () {
-    final path = Path()..addRect(const Rect.fromLTWH(10, 10, 40, 40));
-    final stall = IndoorStall(
-      id: 'sj-test',
-      name: '테스트점포',
-      floor: 1,
-      path: path,
-      bounds: path.getBounds(),
-    );
-    final store = stall.asStore();
-    expect(store.requireGps, isFalse);
-    expect(store.qrPayload, 'TRADADAGO:sj-test');
-    expect(store.products, isNotEmpty);
-    expect(store.products.first.name, contains('테스트점포'));
-    expect(stall.hasDiscountProducts, isTrue);
+  test('food photos follow the stall name and closed shops stay closed', () {
+    IndoorStall stall(String id, String name, StallUse use, {int floor = 1}) {
+      final path = Path()..addRect(const Rect.fromLTWH(10, 10, 40, 40));
+      return IndoorStall(
+        id: id,
+        name: name,
+        floor: floor,
+        path: path,
+        bounds: path.getBounds(),
+        use: use,
+      );
+    }
+
+    final chicken = stall('sj-chicken', '남성통닭', StallUse.food);
+    final mandu = stall('sj-mandu', '정담만두', StallUse.food);
+    final banchan = stall('sj-banchan', '대성반찬', StallUse.sidedish);
+    final shoes = stall('sj-shoes', '동성신발 백화점', StallUse.clothes);
+    final upstairs = stall('sj-up', '2층분식', StallUse.snack, floor: 2);
+
+    expect(chicken.asStore().products.single.imageAsset, AppAssets.foodChicken);
+    expect(mandu.asStore().products.single.imageAsset, AppAssets.foodMandu);
+    expect(banchan.asStore().products.single.imageAsset, AppAssets.foodJeon);
+    expect(chicken.asStore().qrPayload, 'TRADADAGO:sj-chicken');
+    expect(chicken.asStore().requireGps, isTrue);
+    expect(chicken.asStore(qrUnlocked: true).requireGps, isFalse);
+    expect(shoes.hasMenu, isFalse);
+    expect(upstairs.hasMenu, isFalse);
+    expect(shoes.asStore().description, contains('아직 가게 정보가 구현되지 않았습니다'));
   });
 
   test('discount stalls get map pins', () {
-    final goodsPath = Path()..addRect(const Rect.fromLTWH(0, 0, 40, 40));
+    final foodPath = Path()..addRect(const Rect.fromLTWH(0, 0, 40, 40));
     final storagePath = Path()..addRect(const Rect.fromLTWH(50, 0, 40, 40));
-    final goods = IndoorStall(
-      id: 'sj-goods',
-      name: '잡화점',
+    final chicken = IndoorStall(
+      id: 'sj-chicken',
+      name: '남성통닭',
       floor: 1,
-      path: goodsPath,
-      bounds: goodsPath.getBounds(),
+      path: foodPath,
+      bounds: foodPath.getBounds(),
+      use: StallUse.food,
     );
     final storage = IndoorStall(
       id: 'sj-storage',
@@ -144,12 +160,78 @@ void main() {
       use: StallUse.storage,
     );
     final pins = SangjuIndoorPainter.pickDiscountPins(
-      [goods, storage],
+      [chicken, storage],
       scale: 1.1,
     );
-    expect(goods.hasDiscountProducts, isTrue);
+    expect(chicken.hasDiscountProducts, isTrue);
     expect(storage.hasDiscountProducts, isFalse);
-    expect(pins.map((s) => s.id), ['sj-goods']);
+    expect(pins.map((s) => s.id), ['sj-chicken']);
+  });
+
+  test('alley route stays on the walkway instead of cutting across stalls', () {
+    const path = [
+      Offset(0, 0),
+      Offset(100, 0),
+      Offset(100, 100),
+      Offset(0, 100),
+      Offset(0, 0),
+    ];
+    final route = alleyRoute(
+      path: path,
+      from: const Offset(10, -20),
+      to: const Offset(90, -20),
+    );
+    expect(route.first, const Offset(10, -20));
+    expect(route.last, const Offset(90, -20));
+    expect(route.length, lessThan(6));
+    for (final point in route.skip(1).take(route.length - 2)) {
+      final onBottom = point.dy.abs() < 1 && point.dx >= -1 && point.dx <= 101;
+      expect(onBottom, isTrue, reason: '$point left the alley');
+    }
+
+    final around = alleyRoute(
+      path: path,
+      from: const Offset(0, 10),
+      to: const Offset(100, 90),
+    );
+    expect(around.length, greaterThan(3));
+    final cutsCorner = around.any((point) => point.dx > 20 && point.dx < 80 && point.dy > 20 && point.dy < 80);
+    expect(cutsCorner, isFalse);
+  });
+
+  test('alley route takes the shorter corridor from the current position', () {
+    const path = [
+      Offset(0, 0),
+      Offset(0, 10),
+      Offset(300, 10),
+      Offset(300, 0),
+      Offset(100, 0),
+      Offset(100, 10),
+    ];
+    final route = alleyRoute(
+      path: path,
+      from: const Offset(0, 0),
+      to: const Offset(100, 5),
+    );
+    expect(route.first, const Offset(0, 0));
+    expect(route.last, const Offset(100, 5));
+    expect(route.any((point) => point.dx > 150), isFalse);
+  });
+
+  test('panning the indoor map keeps the avatar in place', () {
+    final camera = IndoorCamera(
+      mapSize: const Size(2800, 1400),
+      pad: 1200,
+      focus: const Offset(2600, 1900),
+    );
+    camera.scale = 1;
+    final before = camera.focus;
+    camera.panByScreen(const Offset(40, 0));
+    expect(camera.focus, before);
+    expect(camera.isBrowsing, isTrue);
+    expect(camera.viewFocus.dx, isNot(before.dx));
+    camera.follow();
+    expect(camera.viewFocus, before);
   });
 
   test('avatar screen size follows map zoom', () {
@@ -189,15 +271,21 @@ void main() {
     expect(data.demoWalkPath.first, data.startFocus);
     expect(data.demoWalkPath.last, data.startFocus);
     expect(data.demoWalkPath.length, greaterThan(8));
-    expect(data.stalls.any((s) => s.name == '동성신발 백화점'), isTrue);
-    expect(data.stalls.any((s) => s.name == '새마을종묘사'), isTrue);
+    expect(data.stalls.any((s) => s.name == '꽃분이네'), isTrue);
+    expect(data.stalls.any((s) => s.name.contains('화장실')), isTrue);
     expect(data.stalls.any((s) => s.name == '상인교육장' && s.floor == 2), isTrue);
-    final pinCandidates = data.stalls.where((s) {
-      return s.use.isFilterable && s.use != StallUse.service;
-    }).length;
-    final discounted = data.stalls.where((s) => s.hasDiscountProducts).length;
-    expect(discounted, lessThan(pinCandidates));
-    expect(discounted, closeTo(pinCandidates * 0.75, 18));
+    final discounted = data.stalls.where((s) => s.hasDiscountProducts).toList();
+    expect(discounted, isNotEmpty);
+    expect(discounted.every((s) => s.floor == 1 && s.use.isFood), isTrue);
+    expect(discounted.any((s) => s.name.contains('만두')), isTrue);
+    expect(
+      data.stalls.where((s) => s.name.contains('화장실')).every((s) => !s.hasMenu),
+      isTrue,
+    );
+    expect(data.stalls.where((s) => s.floor == 2).every((s) => !s.hasMenu), isTrue);
+    final mandu = discounted.firstWhere((s) => s.name.contains('만두'));
+    expect(mandu.asStore().products.single.imageAsset, AppAssets.foodMarketMandu);
+    expect(mandu.asStore().products.single.reviewImageAsset, AppAssets.foodMandu);
     final floor2Bounds = data.stalls
         .where((s) => s.floor == 2)
         .map((s) => s.bounds)
@@ -242,6 +330,8 @@ void main() {
     );
     expect(labels, hasLength(1));
 
+    AppSession.instance.chooseDemoAvatar(DemoAvatarGender.male);
+    addTearDown(() => AppSession.instance.demoAvatarGender = null);
     await tester.pumpWidget(const MaterialApp(home: SangjuIndoorMapScreen()));
     await tester.runAsync(() async {
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -250,14 +340,24 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('시장 데모'), findsOneWidget);
-    expect(find.textContaining('점포 ${data.stalls.length}곳'), findsOneWidget);
+    expect(data.restaurants, isNotEmpty);
+    expect(data.restaurants.every((s) => s.floor == 1 && s.use.isFood), isTrue);
+    expect(data.restaurants.any((s) => s.use == StallUse.seafood), isTrue);
+    expect(data.restaurants.any((s) => s.use == StallUse.produce), isTrue);
+    expect(data.restaurants, hasLength(182));
+    expect(
+      SangjuIndoorPainter.pickDiscountPins(data.stalls, scale: 0.4, floorFilter: 1),
+      hasLength(data.restaurants.length),
+    );
+    expect(SangjuIndoorMap.publishedStallCount, data.restaurants.length);
+    expect(find.textContaining('식품 ${data.restaurants.length}곳'), findsOneWidget);
     expect(find.textContaining('캐릭터 고정'), findsOneWidget);
     expect(find.text('카테고리 선택'), findsOneWidget);
     expect(find.text('1층 선택'), findsOneWidget);
     expect(find.text('가게 정보 보기'), findsOneWidget);
     expect(find.text('골목 시연 걷기'), findsOneWidget);
     expect(find.text('색칠 0%'), findsOneWidget);
-    expect(find.text('${0}/${data.stalls.length}곳'), findsOneWidget);
+    expect(find.text('${0}/${data.restaurants.length}곳'), findsOneWidget);
     expect(find.byIcon(Icons.add), findsNothing);
     expect(find.byIcon(Icons.remove), findsNothing);
     expect(find.byIcon(Icons.explore_outlined), findsNothing);
@@ -293,8 +393,30 @@ void main() {
               floor: 1,
               path: Path()..addRect(const Rect.fromLTWH(0, 0, 10, 10)),
               bounds: const Rect.fromLTWH(0, 0, 10, 10),
+              use: StallUse.clothes,
             ),
             verified: false,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('아직 가게 정보가 구현되지 않았습니다.'), findsOneWidget);
+    expect(find.text('QR 인증하기'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: IndoorStallSheet(
+            stall: IndoorStall(
+              id: 'sj-chicken',
+              name: '남성통닭',
+              floor: 1,
+              path: Path()..addRect(const Rect.fromLTWH(0, 0, 10, 10)),
+              bounds: const Rect.fromLTWH(0, 0, 10, 10),
+              use: StallUse.food,
+            ),
+            verified: false,
+            qrEnabled: true,
             onScanQr: () {},
             onOpenStore: () {},
           ),
@@ -303,7 +425,7 @@ void main() {
     );
     expect(find.text('QR 인증하기'), findsOneWidget);
     expect(find.text('가게·상품 자세히 보기'), findsOneWidget);
-    expect(find.textContaining('마감할인'), findsWidgets);
+    expect(find.textContaining('통닭'), findsWidgets);
   });
 
   testWidgets('completed indoor plan fits the market floor', (tester) async {
@@ -330,5 +452,21 @@ void main() {
     expect(find.textContaining('0/${SangjuIndoorMap.publishedStallCount}곳'), findsOneWidget);
     expect(find.text('1층 선택'), findsOneWidget);
     expect(find.byType(InteractiveViewer), findsOneWidget);
+  });
+
+  testWidgets('market demo asks for an avatar the first time', (tester) async {
+    AppSession.instance.demoAvatarGender = null;
+    addTearDown(() => AppSession.instance.demoAvatarGender = null);
+
+    await tester.pumpWidget(const MaterialApp(home: SangjuIndoorMapScreen()));
+    await tester.pump();
+
+    expect(find.text('남성인가요, 여성인가요?'), findsOneWidget);
+    await tester.tap(find.text('여성'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(AppSession.instance.demoAvatarGender, DemoAvatarGender.female);
+    expect(find.text('남성인가요, 여성인가요?'), findsNothing);
   });
 }

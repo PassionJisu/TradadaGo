@@ -7,6 +7,7 @@ class Product {
     required this.quantity,
     required this.pickupWindow,
     this.imageAsset,
+    this.reviewImageAsset,
   });
 
   final String id;
@@ -16,6 +17,9 @@ class Product {
   final int quantity;
   final String pickupWindow;
   final String? imageAsset;
+
+  /// 픽업해서 먹으며 올린 리뷰용 사진. 가게 진열 사진과 구분한다.
+  final String? reviewImageAsset;
 
   int get saveAmount => originalPrice - discountPrice;
 

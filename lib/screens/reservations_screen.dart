@@ -36,7 +36,7 @@ class ReservationsScreen extends StatelessWidget {
                 const Expanded(
                   child: Center(
                     child: Text(
-                      '아직 이용 내역이 없습니다.\n가게 앞에서 QR을 찍거나 마감할인 상품을 예약해보세요.',
+                      '아직 이용 내역이 없습니다.\n식당 메뉴를 예약한 뒤, 가게 앞에서 QR로 수령하세요.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Color(0xFF6B7280)),
                     ),
@@ -93,8 +93,8 @@ class ReservationsScreen extends StatelessWidget {
                                       const SizedBox(height: 6),
                                       Text(
                                         r.isQrVisit
-                                            ? 'QR 방문 인증'
-                                            : '${_won(r.price)} · 픽업 예약',
+                                            ? '${_won(r.price)} · QR 수령 완료'
+                                            : '${_won(r.price)} · 예약됨',
                                         style: const TextStyle(
                                           color: AppColors.pinRed,
                                           fontWeight: FontWeight.w800,
@@ -110,7 +110,18 @@ class ReservationsScreen extends StatelessWidget {
                                         ),
                                       ),
                                       const SizedBox(height: 8),
-                                      if (canReview)
+                                      if (r.isOpenReservation)
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: OutlinedButton(
+                                            onPressed: () => _confirmCancel(
+                                              context,
+                                              r,
+                                            ),
+                                            child: const Text('예약 취소'),
+                                          ),
+                                        )
+                                      else if (canReview)
                                         Align(
                                           alignment: Alignment.centerRight,
                                           child: FilledButton.tonalIcon(
@@ -140,9 +151,9 @@ class ReservationsScreen extends StatelessWidget {
                                             color: AppColors.teal,
                                           ),
                                         )
-                                      else
+                                      else if (r.isQrVisit)
                                         const Text(
-                                          '가게 앞에서 QR 인증하면 방문이 추가되고 리뷰를 1회 작성할 수 있습니다.',
+                                          '예약한 메뉴를 가게 앞에서 QR로 수령하면 리뷰를 1회 작성할 수 있습니다.',
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,
@@ -173,6 +184,31 @@ class ReservationsScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  static Future<void> _confirmCancel(
+    BuildContext context,
+    Reservation reservation,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('정말 취소하시겠습니까?'),
+        content: Text('${reservation.storeName} 예약이 이용내역에서 사라집니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('아니오'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('예약 취소'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    AppSession.instance.cancelReservation(reservation.id);
   }
 
   static Store _storeFor(Reservation item) {

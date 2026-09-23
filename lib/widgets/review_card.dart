@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/review.dart';
+import 'review_photo.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
@@ -47,13 +48,23 @@ class ReviewCard extends StatelessWidget {
               const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  review.photoAsset,
+                child: ReviewPhoto(
+                  source: review.photoAsset,
                   height: 140,
                   width: double.infinity,
-                  fit: BoxFit.cover,
                 ),
               ),
+              if (review.eatenLabel.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '먹은 음식  ${review.eatenLabel}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                    height: 1.35,
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               Text(review.body, style: const TextStyle(height: 1.4)),
               const SizedBox(height: 8),

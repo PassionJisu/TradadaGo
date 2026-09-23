@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/product.dart';
+import '../models/reservation.dart';
 import '../models/store.dart';
 import '../state/app_session.dart';
 import '../state/location_session.dart';
 import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 import '../util/money.dart';
+import '../widgets/review_photo.dart';
 import 'qr_scan_screen.dart';
 import 'write_review_screen.dart';
 
@@ -22,7 +24,9 @@ class StoreDetailScreen extends StatelessWidget {
       listenable: AppSession.instance,
       builder: (context, _) {
         final nearby = LocationSession.instance.isNear(store.position);
-        final canScan = !store.requireGps || nearby;
+        final reserved = AppSession.instance.activeReservation(store.id) != null;
+        final atStore = !store.requireGps || nearby;
+        final canScan = reserved && atStore;
         final stampedToday =
             AppSession.instance.hasVisitStampToday(store.id);
         final painted = AppSession.instance.hasPainted(store.id);
@@ -109,7 +113,7 @@ class StoreDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            ...store.products.map((p) => _ProductCard(store: store, product: p)),
+            _StoreMenu(store: store),
             const SizedBox(height: 16),
           ],
           FilledButton.icon(
@@ -123,7 +127,13 @@ class StoreDetailScreen extends StatelessWidget {
                   }
                 : null,
             icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: Text(canScan ? 'QR 인증하기' : '가게 앞에서만 QR 인증이 됩니다'),
+            label: Text(
+              canScan
+                  ? 'QR 인증하기'
+                  : reserved
+                      ? '가게 앞에서만 QR 인증이 됩니다'
+                      : '예약 후 QR 인증이 됩니다',
+            ),
           ),
           const SizedBox(height: 10),
           if (canReview)
@@ -165,11 +175,10 @@ class StoreDetailScreen extends StatelessWidget {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.asset(
-                        review.photoAsset,
+                      child: ReviewPhoto(
+                        source: review.photoAsset,
                         width: 56,
                         height: 56,
-                        fit: BoxFit.cover,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -182,6 +191,14 @@ class StoreDetailScreen extends StatelessWidget {
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 4),
+                          if (review.eatenLabel.isNotEmpty)
+                            Text(
+                              '먹은 음식  ${review.eatenLabel}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.navy,
+                              ),
+                            ),
                           Text(review.body, style: const TextStyle(height: 1.35)),
                         ],
                       ),
@@ -206,11 +223,97 @@ class StoreDetailScreen extends StatelessWidget {
   }
 }
 
-class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.store, required this.product});
+class _StoreMenu extends StatefulWidget {
+  const _StoreMenu({required this.store});
 
   final Store store;
+
+  @override
+  State<_StoreMenu> createState() => _StoreMenuState();
+}
+
+class _StoreMenuState extends State<_StoreMenu> {
+  final _qty = <String, int>{};
+
+  int _count(Product product) => _qty[product.id] ?? 0;
+
+  void _set(Product product, int next) {
+    final capped = next.clamp(0, product.quantity);
+    setState(() => _qty[product.id] = capped);
+  }
+
+  Future<void> _reserve() async {
+    final items = [
+      for (final product in widget.store.products)
+        if (_count(product) > 0)
+          ReservedItem(
+            name: product.name,
+            unitPrice: product.discountPrice,
+            quantity: _count(product),
+          ),
+    ];
+    if (items.isEmpty) {
+      await showAppNotice(context, '예약할 메뉴와 개수를 선택해주세요.');
+      return;
+    }
+    final ok = AppSession.instance.reserveFoods(store: widget.store, items: items);
+    if (!mounted) return;
+    if (!ok) {
+      await showAppNotice(context, '진행 중인 예약이 있습니다. 이용내역에서 취소한 뒤 다시 예약하세요.');
+      return;
+    }
+    setState(_qty.clear);
+    final summary = items.map((item) => item.label).join(', ');
+    await showAppNotice(context, '예약되었습니다. $summary');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final open = AppSession.instance.activeReservation(widget.store.id);
+    final chosen = widget.store.products.where((product) => _count(product) > 0);
+    final total = chosen.fold<int>(
+      0,
+      (sum, product) => sum + product.discountPrice * _count(product),
+    );
+    return Column(
+      children: [
+        for (final product in widget.store.products)
+          _ProductCard(
+            product: product,
+            quantity: _count(product),
+            onChanged: open == null ? (next) => _set(product, next) : null,
+          ),
+        if (open != null)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              '이 식당 예약이 진행 중입니다. 이용내역에서 취소할 수 있습니다.',
+              style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.navy),
+            ),
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: total > 0 ? _reserve : null,
+              child: Text(total > 0 ? '선택 메뉴 예약하기  ${won(total)}' : '메뉴와 개수를 선택하세요'),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ProductCard extends StatelessWidget {
+  const _ProductCard({
+    required this.product,
+    required this.quantity,
+    required this.onChanged,
+  });
+
   final Product product;
+  final int quantity;
+  final ValueChanged<int>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -311,19 +414,26 @@ class _ProductCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () {
-                AppSession.instance.addReservation(
-                  store: store,
-                  productName: product.name,
-                  price: product.discountPrice,
-                );
-                showAppNotice(context, '${product.name} 픽업 예약이 완료되었습니다.');
-              },
-              child: const Text('픽업 예약하기'),
-            ),
+          Row(
+            children: [
+              const Text(
+                '수량',
+                style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: onChanged == null ? null : () => onChanged!(quantity - 1),
+                icon: const Icon(Icons.remove_circle_outline),
+              ),
+              Text(
+                '$quantity',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              IconButton(
+                onPressed: onChanged == null ? null : () => onChanged!(quantity + 1),
+                icon: const Icon(Icons.add_circle_outline),
+              ),
+            ],
           ),
         ],
       ),

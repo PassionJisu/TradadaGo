@@ -1,28 +1,50 @@
-enum UsageKind { pickup, qrVisit }
+enum ReservationStatus { reserved, visited }
+
+class ReservedItem {
+  const ReservedItem({
+    required this.name,
+    required this.unitPrice,
+    required this.quantity,
+  });
+
+  final String name;
+  final int unitPrice;
+  final int quantity;
+
+  int get linePrice => unitPrice * quantity;
+
+  String get label => '$name × $quantity';
+}
 
 class Reservation {
   Reservation({
     required this.id,
     required this.storeId,
     required this.storeName,
-    required this.productName,
-    required this.price,
+    required this.items,
     required this.createdAt,
-    this.kind = UsageKind.pickup,
+    this.status = ReservationStatus.reserved,
     this.reviewId,
   });
 
   final String id;
   final String storeId;
   final String storeName;
-  final String productName;
-  final int price;
+  final List<ReservedItem> items;
   final DateTime createdAt;
-  final UsageKind kind;
+  ReservationStatus status;
   String? reviewId;
 
-  bool get isQrVisit => kind == UsageKind.qrVisit;
+  bool get isQrVisit => status == ReservationStatus.visited;
+  bool get isOpenReservation => status == ReservationStatus.reserved;
   bool get hasReview => reviewId != null;
+
+  int get price => items.fold(0, (sum, item) => sum + item.linePrice);
+
+  String get productName =>
+      items.isEmpty ? '예약 메뉴 없음' : items.map((item) => item.label).join(', ');
+
+  List<String> get eatenFoods => [for (final item in items) item.label];
 
   String get timeLabel {
     String two(int n) => n.toString().padLeft(2, '0');

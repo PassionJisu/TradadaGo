@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 
 import '../config/assets.dart';
@@ -22,6 +24,8 @@ class StampGrant {
   final TitleTier? unlockedTitle;
 }
 
+enum DemoAvatarGender { male, female }
+
 class AppSession extends ChangeNotifier {
   AppSession._() {
     reviews.addAll(_seedReviews());
@@ -36,6 +40,18 @@ class AppSession extends ChangeNotifier {
 
   bool loggedIn = false;
   String displayName = '관리자';
+
+  /// 시장 데모 입장 때 한 번 고른다. 가입 흐름에서는 성별에 맞춰 정해질 값이다.
+  DemoAvatarGender? demoAvatarGender;
+
+  String get playAvatarAsset => demoAvatarGender == DemoAvatarGender.female
+      ? AppAssets.playAvatarFemale
+      : AppAssets.playAvatar;
+
+  void chooseDemoAvatar(DemoAvatarGender gender) {
+    demoAvatarGender = gender;
+    notifyListeners();
+  }
 
   final Set<String> uniqueVisitStoreIds = {};
   final Set<String> qrVerifiedStoreIds = {};
@@ -54,11 +70,25 @@ class AppSession extends ChangeNotifier {
 
   int get stampCount => stamps.length;
   int get uniqueVisitCount => uniqueVisitStoreIds.length;
-  int get boardIndex => stampCount == 0 ? 0 : (stampCount - 1) ~/ boardSize;
-  int get boardFillCount {
-    if (stampCount == 0) return 0;
-    final filled = stampCount % boardSize;
-    return filled == 0 ? boardSize : filled;
+  /// 지금 채우는 보드. 30칸이 차면 다음 빈 보드로 넘어간다.
+  int get boardIndex => stampCount ~/ boardSize;
+  int get boardCount => boardIndex + 1;
+  int get boardFillCount => stampCount % boardSize;
+
+  int fillOnBoard(int board) {
+    final remain = stampCount - board * boardSize;
+    if (remain <= 0) return 0;
+    if (remain >= boardSize) return boardSize;
+    return remain;
+  }
+
+  /// 실제로 지급된 지역사랑상품권 합계. 화면의 P는 이 금액이다.
+  int get stampPoints {
+    var total = repeatingPacksClaimed * 10000;
+    for (final tier in TitleCatalog.all) {
+      if (earnedTitleIds.contains(tier.id)) total += tier.voucherWon;
+    }
+    return total;
   }
 
   int get repeatingProgress => stampCount % repeatingStampGoal;
@@ -96,6 +126,13 @@ class AppSession extends ChangeNotifier {
 
   bool canWriteReview(String storeId) => unreviewedQrVisit(storeId) != null;
 
+  Reservation? activeReservation(String storeId) {
+    for (final item in reservations) {
+      if (item.storeId == storeId && item.isOpenReservation) return item;
+    }
+    return null;
+  }
+
   Reservation? unreviewedQrVisit(String storeId) {
     for (final item in reservations) {
       if (item.storeId == storeId && item.isQrVisit && !item.hasReview) {
@@ -108,21 +145,14 @@ class AppSession extends ChangeNotifier {
   bool canWriteReviewFor(Reservation item) =>
       item.isQrVisit && !item.hasReview;
 
-  void markQrVerified(Store store) {
+  /// 예약이 있을 때만 수령 인증으로 바꾼다. 예약 없이 방문 기록을 만들지 않는다.
+  bool markQrVerified(Store store) {
+    final reservation = activeReservation(store.id);
+    if (reservation == null) return false;
+    reservation.status = ReservationStatus.visited;
     qrVerifiedStoreIds.add(store.id);
-    reservations.insert(
-      0,
-      Reservation(
-        id: 'qr-${DateTime.now().microsecondsSinceEpoch}',
-        storeId: store.id,
-        storeName: store.name,
-        productName: '현장 방문',
-        price: 0,
-        createdAt: DateTime.now(),
-        kind: UsageKind.qrVisit,
-      ),
-    );
     notifyListeners();
+    return true;
   }
 
   StampGrant addDemoVisitStamp() {
@@ -216,23 +246,38 @@ class AppSession extends ChangeNotifier {
         : '추천했습니다. 오늘 $recommendsToday/$dailyRecommendLimit회';
   }
 
-  void addReservation({
+  /// 이미 진행 중인 예약이 있으면 false. 수량은 1개 이상인 메뉴만 담는다.
+  bool reserveFoods({
     required Store store,
-    required String productName,
-    required int price,
+    required List<ReservedItem> items,
   }) {
+    final chosen = [
+      for (final item in items)
+        if (item.quantity > 0) item,
+    ];
+    if (chosen.isEmpty || activeReservation(store.id) != null) return false;
     reservations.insert(
       0,
       Reservation(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: 'rsv-${DateTime.now().microsecondsSinceEpoch}',
         storeId: store.id,
         storeName: store.name,
-        productName: productName,
-        price: price,
+        items: chosen,
         createdAt: DateTime.now(),
       ),
     );
     notifyListeners();
+    return true;
+  }
+
+  bool cancelReservation(String id) {
+    final index = reservations.indexWhere((item) => item.id == id);
+    if (index < 0) return false;
+    final item = reservations[index];
+    if (!item.isOpenReservation || item.hasReview) return false;
+    reservations.removeAt(index);
+    notifyListeners();
+    return true;
   }
 
   StampGrant addPhotoReview({
@@ -254,7 +299,7 @@ class AppSession extends ChangeNotifier {
     if (visit == null || visit.hasReview) {
       return const StampGrant(
         added: false,
-        message: '이 방문은 이미 리뷰를 남겼습니다. QR을 다시 인증하면 새 방문으로 작성할 수 있습니다.',
+        message: '예약한 뒤 QR로 수령 인증한 식당만 리뷰를 남길 수 있습니다.',
       );
     }
 
@@ -267,6 +312,7 @@ class AppSession extends ChangeNotifier {
       photoAsset: photoAsset,
       createdAt: DateTime.now(),
       isMine: true,
+      eatenFoods: visit.eatenFoods,
     );
     reviews.insert(0, review);
     visit.reviewId = review.id;
@@ -319,11 +365,13 @@ class AppSession extends ChangeNotifier {
   }
 
   void _appendStamp({required String source}) {
+    final roll = Random();
     stamps.add(
       CollectedStamp(
-        landmarkId: GwangjuLandmarks.atIndex(stamps.length).id,
+        landmarkId: GwangjuLandmarks.random().id,
         source: source,
         at: DateTime.now(),
+        points: 100 + roll.nextInt(11) * 10,
       ),
     );
     final packs = stampCount ~/ repeatingStampGoal;
@@ -371,17 +419,43 @@ class AppSession extends ChangeNotifier {
   }
 }
 
+Review _seedReview({
+  required String id,
+  required String author,
+  required String storeId,
+  required String storeName,
+  required String body,
+  required String photoAsset,
+  required DateTime createdAt,
+  required int likes,
+  required String eaten,
+}) {
+  return Review(
+    id: id,
+    author: author,
+    storeId: storeId,
+    storeName: storeName,
+    body: body,
+    photoAsset: photoAsset,
+    createdAt: createdAt,
+    likes: likes,
+    eatenFoods: [eaten],
+  );
+}
+
 List<Review> _seedReviews() {
+  final now = DateTime.now();
   return [
-    Review(
+    _seedReview(
       id: 'r1',
       author: '충장로막내',
       storeId: 'yd-honguh',
       storeName: '양동홍어타운',
       body: '홍어모둠이 푸짐해요. 시장 골목 분위기 그대로라 또 오고 싶습니다.',
       photoAsset: AppAssets.foodHonguh,
-      createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+      createdAt: now.subtract(const Duration(hours: 5)),
       likes: 21,
+      eaten: '홍어모둠 × 1',
     ),
     Review(
       id: 'r2',
@@ -389,8 +463,9 @@ List<Review> _seedReviews() {
       storeId: 'yd-gukbap',
       storeName: '천변국밥',
       body: '국물이 진하고 픽업이 빨라요. 포토 남기러 온 보람 있습니다.',
-      photoAsset: AppAssets.foodGukbap,
+      photoAsset: AppAssets.foodReviewGukbap,
       createdAt: DateTime.now().subtract(const Duration(hours: 8)),
+      eatenFoods: const ['국밥 × 1'],
       likes: 34,
     ),
     Review(
@@ -401,6 +476,7 @@ List<Review> _seedReviews() {
       body: '김밥 4줄 마감백 가성비 최고. 스탬프 찍고 바로 먹었습니다.',
       photoAsset: AppAssets.foodGimbap,
       createdAt: DateTime.now().subtract(const Duration(days: 1)),
+      eatenFoods: const ['김밥 × 4'],
       likes: 17,
     ),
     Review(
@@ -411,6 +487,7 @@ List<Review> _seedReviews() {
       body: '제철 과일 모음이 신선합니다. 사진으로 남기기 좋아요.',
       photoAsset: AppAssets.foodFruit,
       createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
+      eatenFoods: const ['제철 과일 × 1'],
       likes: 12,
     ),
     Review(
@@ -421,6 +498,7 @@ List<Review> _seedReviews() {
       body: '모둠전이 바삭. 시장 구경 코스로 추천합니다.',
       photoAsset: AppAssets.foodJeon,
       createdAt: DateTime.now().subtract(const Duration(days: 2)),
+      eatenFoods: const ['모둠전 × 1'],
       likes: 9,
     ),
     Review(
@@ -431,6 +509,7 @@ List<Review> _seedReviews() {
       body: '홍어찜도 잡내 없이 깔끔합니다. 저녁 픽업 추천.',
       photoAsset: AppAssets.foodSeafood,
       createdAt: DateTime.now().subtract(const Duration(days: 3)),
+      eatenFoods: const ['홍어찜 × 1'],
       likes: 6,
     ),
     Review(
@@ -441,6 +520,7 @@ List<Review> _seedReviews() {
       body: '육회가 달고 고소해요. 마감팩이라 양이 알찹니다.',
       photoAsset: AppAssets.foodYukhoe,
       createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+      eatenFoods: const ['육회 × 1'],
       likes: 19,
     ),
     Review(
@@ -451,6 +531,7 @@ List<Review> _seedReviews() {
       body: '고등어 구이 껍질이 바삭. 갈치까지 한 팩이라 저녁이 해결됐어요.',
       photoAsset: AppAssets.foodMackerel,
       createdAt: DateTime.now().subtract(const Duration(hours: 11)),
+      eatenFoods: const ['고등어구이 × 1'],
       likes: 14,
     ),
     Review(
@@ -461,6 +542,7 @@ List<Review> _seedReviews() {
       body: '인절미가 쫄깃하고 콩가루가 고소합니다. 간식용으로 최고.',
       photoAsset: AppAssets.foodTteok,
       createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 4)),
+      eatenFoods: const ['인절미 × 1'],
       likes: 11,
     ),
     Review(
@@ -471,6 +553,7 @@ List<Review> _seedReviews() {
       body: '군밤이 달고 따뜻해요. 골목에서 먹으니 더 맛있습니다.',
       photoAsset: AppAssets.foodGunbam,
       createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+      eatenFoods: const ['군밤 × 1'],
       likes: 16,
     ),
     Review(
@@ -481,6 +564,7 @@ List<Review> _seedReviews() {
       body: '떡볶이 국물이 칼칼하고 매콤해요. 김밥이랑 같이 픽업 강추.',
       photoAsset: AppAssets.foodTteokbokki,
       createdAt: DateTime.now().subtract(const Duration(hours: 6)),
+      eatenFoods: const ['떡볶이 × 1'],
       likes: 13,
     ),
     Review(
@@ -491,6 +575,7 @@ List<Review> _seedReviews() {
       body: '손수건 세트가 단정하고 포장도 예뻐요. 선물용으로 샀습니다.',
       photoAsset: AppAssets.foodBojagi,
       createdAt: DateTime.now().subtract(const Duration(days: 4)),
+      eatenFoods: const ['손수건 세트 × 1'],
       likes: 8,
     ),
     Review(
@@ -499,8 +584,9 @@ List<Review> _seedReviews() {
       storeId: 'yd-gukbap',
       storeName: '천변국밥',
       body: '수육 포장도 야들야들. 국밥이랑 같이 시키면 든든합니다.',
-      photoAsset: AppAssets.foodGukbap,
+      photoAsset: AppAssets.foodSuyuk,
       createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 6)),
+      eatenFoods: const ['수육 × 1'],
       likes: 10,
     ),
     Review(
@@ -511,6 +597,7 @@ List<Review> _seedReviews() {
       body: '굴비 소팩이 짜지 않고 담백해요. 밥반찬으로 딱입니다.',
       photoAsset: AppAssets.foodDried,
       createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 8)),
+      eatenFoods: const ['굴비 × 1'],
       likes: 7,
     ),
     Review(
@@ -521,6 +608,7 @@ List<Review> _seedReviews() {
       body: '굴비가 기름지고 간도 세지 않아요. A동 건어물 코스로 추천합니다.',
       photoAsset: AppAssets.foodDried,
       createdAt: DateTime.now().subtract(const Duration(hours: 4)),
+      eatenFoods: const ['굴비 × 1'],
       likes: 15,
     ),
     Review(
@@ -531,6 +619,7 @@ List<Review> _seedReviews() {
       body: '볶음멸치가 바삭하고 달지 않아요. 국물멸치도 시원합니다.',
       photoAsset: AppAssets.foodDried,
       createdAt: DateTime.now().subtract(const Duration(hours: 9)),
+      eatenFoods: const ['볶음멸치 × 1'],
       likes: 9,
     ),
   ];

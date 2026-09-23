@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../config/assets.dart';
 import '../models/store.dart';
 import '../state/app_session.dart';
 import '../state/location_session.dart';
@@ -18,45 +18,10 @@ class QrScanScreen extends StatefulWidget {
 }
 
 class _QrScanScreenState extends State<QrScanScreen> {
-  final _controller = MobileScannerController(autoStart: false);
   bool _handled = false;
   String? _hint;
 
   static const _lensSize = 236.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _prepareCamera();
-  }
-
-  Future<void> _prepareCamera() async {
-    try {
-      await _controller.start();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _hint = '카메라를 열 수 없습니다. 에뮬레이터는 아래 시연 인증을 사용하세요.');
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onDetect(BarcodeCapture capture) {
-    final barcodes = capture.barcodes;
-    String? value;
-    for (final barcode in barcodes) {
-      final raw = barcode.rawValue;
-      if (raw != null && raw.isNotEmpty) {
-        value = raw;
-        break;
-      }
-    }
-    if (value != null) _verify(value);
-  }
 
   Future<void> _verify(String payload) async {
     if (_handled) return;
@@ -71,15 +36,19 @@ class _QrScanScreenState extends State<QrScanScreen> {
       setState(() => _hint = '이 가게 QR이 아닙니다. ${widget.store.qrPayload}');
       return;
     }
+    final ok = AppSession.instance.markQrVerified(widget.store);
+    if (!ok) {
+      setState(() => _hint = '이 식당을 먼저 예약한 뒤 QR을 인증할 수 있습니다.');
+      return;
+    }
     _handled = true;
-    AppSession.instance.markQrVerified(widget.store);
     if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('QR 인증 성공'),
         content: Text(
-          '${widget.store.name} 앞에서 인증되었습니다.\n리뷰는 이용내역에서 작성할 수 있습니다.',
+          '${widget.store.name} 예약 메뉴를 수령했습니다.\n먹은 음식은 이용내역 리뷰에 함께 기록됩니다.',
         ),
         actions: [
           TextButton(
@@ -105,35 +74,18 @@ class _QrScanScreenState extends State<QrScanScreen> {
       body: Column(
         children: [
           Expanded(
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [Color(0xFF2A3344), Color(0xFF101318)],
-                ),
-              ),
-              child: Center(
-                child: _MagnifierLens(
-                  size: _lensSize,
-                  child: MobileScanner(
-                    controller: _controller,
-                    fit: BoxFit.cover,
-                    onDetect: _onDetect,
-                    errorBuilder: (context, error) => const ColoredBox(
-                      color: Color(0xFF1A1A1A),
-                      child: Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            '렌즈 안에 카메라가 열립니다',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        ),
-                      ),
-                    ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(AppAssets.qrMarketCounter, fit: BoxFit.cover),
+                const ColoredBox(color: Color(0x33000000)),
+                Center(
+                  child: const _MagnifierLens(
+                    size: _lensSize,
+                    child: _LensQrPhoto(),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
           Container(
@@ -155,9 +107,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
                     ),
                   ),
                 Text(
-                  widget.store.requireGps
-                      ? '돋보기 렌즈 안으로 QR을 맞추세요. GPS 근접 + QR 이중 인증.'
-                      : '돋보기 렌즈 안으로 QR을 맞추세요. 내부 지도 점포는 핀 없이 QR만 인증합니다.',
+                  '렌즈 안은 계산대 QR을 비춘 시연 화면입니다. 에뮬레이터는 아래 시연 인증을 누르세요.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Color(0xFF6B7280)),
                 ),
@@ -180,6 +130,44 @@ class _QrScanScreenState extends State<QrScanScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 돋보기 렌즈가 계산대 QR을 확대해서 보여 준다.
+class _LensQrPhoto extends StatelessWidget {
+  const _LensQrPhoto();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = constraints.biggest.shortestSide;
+        if (!side.isFinite || side <= 0) return const SizedBox.shrink();
+        const focusX = 610 / 864;
+        const focusY = 800 / 1152;
+        final imageW = side * 3.5;
+        final imageH = imageW * (1152 / 864);
+        return ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: 0,
+            minHeight: 0,
+            maxWidth: double.infinity,
+            maxHeight: double.infinity,
+            child: Transform.translate(
+              offset: Offset(side / 2 - focusX * imageW, side / 2 - focusY * imageH),
+              child: Image.asset(
+                AppAssets.qrMarketCounter,
+                width: imageW,
+                height: imageH,
+                fit: BoxFit.fill,
+                filterQuality: FilterQuality.medium,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -278,18 +266,7 @@ class _MagnifierLens extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ColoredBox(
-                      color: Colors.black,
-                      child: OverflowBox(
-                        maxWidth: size * 1.5,
-                        maxHeight: size * 1.5,
-                        child: SizedBox(
-                          width: size * 1.5,
-                          height: size * 1.5,
-                          child: child,
-                        ),
-                      ),
-                    ),
+                    ColoredBox(color: Colors.black, child: child),
                     IgnorePointer(
                       child: DecoratedBox(
                         decoration: BoxDecoration(

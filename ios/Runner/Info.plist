@@ -11,7 +11,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>시장 안에서 아바타와 가게 핀을 표시하기 위해 위치 권한이 필요합니다.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>가게 QR 코드를 스캔해 스탬프를 찍기 위해 카메라가 필요합니다.</string>
+	<string>가게 QR을 찍거나 포토 리뷰 사진을 촬영하기 위해 카메라가 필요합니다.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>포토 리뷰에 보관함 사진을 첨부하기 위해 사진 접근이 필요합니다.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

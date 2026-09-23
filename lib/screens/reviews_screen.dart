@@ -6,6 +6,7 @@ import '../state/app_session.dart';
 import '../theme/app_colors.dart';
 import '../util/money.dart';
 import '../widgets/review_card.dart';
+import '../widgets/review_photo.dart';
 import 'store_reviews_screen.dart';
 
 class ReviewsScreen extends StatelessWidget {
@@ -117,11 +118,10 @@ class _Podium extends StatelessWidget {
             if (review != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: Image.asset(
-                  review.photoAsset,
+                child: ReviewPhoto(
+                  source: review.photoAsset,
                   height: 44,
                   width: 44,
-                  fit: BoxFit.cover,
                 ),
               ),
               const SizedBox(height: 4),

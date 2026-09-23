@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../state/indoor_qr_cue.dart';
 import '../widgets/tradada_bottom_nav.dart';
 import 'home_map_screen.dart';
 import 'my_page_screen.dart';
@@ -23,12 +24,18 @@ class _HomeShellState extends State<HomeShell> {
       extendBody: true,
       floatingActionButtonLocation: _StayDockedFabLocation.center,
       floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
-      floatingActionButton: StampFab(
-        onTap: () {
-          setState(() => _index = 0);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _mapKey.currentState?.openStampFlow();
-          });
+      floatingActionButton: ListenableBuilder(
+        listenable: IndoorQrCue.instance,
+        builder: (context, _) {
+          return StampFab(
+            alert: IndoorQrCue.instance.ready,
+            onTap: () {
+              setState(() => _index = 0);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _mapKey.currentState?.openStampFlow();
+              });
+            },
+          );
         },
       ),
       body: IndexedStack(

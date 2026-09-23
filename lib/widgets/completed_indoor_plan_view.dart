@@ -81,7 +81,8 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
     }
 
     final visited = widget.session.paintedStoreIds;
-    final painted = data.stalls.where((s) => visited.contains(s.id)).length;
+    final restaurants = data.restaurants;
+    final painted = restaurants.where((s) => visited.contains(s.id)).length;
     final fit = _viewport.isEmpty
         ? 0.2
         : math.min(
@@ -92,7 +93,7 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        PaintProgressBanner(painted: painted, total: data.stalls.length),
+        PaintProgressBanner(painted: painted, total: restaurants.length),
         const SizedBox(height: 8),
         MarketMapToolbar(
           categoryLabel: _filterUse == null
@@ -174,9 +175,10 @@ class _CompletedIndoorPlanViewState extends State<CompletedIndoorPlanView> {
   }
 
   void _openIndex(SangjuIndoorMap data, Set<String> visited) {
-    final listed = data.uniqueNamed(
-      data.stallsOnFloor(_floor, use: _filterUse),
-    );
+    final listed = data.uniqueNamed([
+      for (final stall in data.stallsOnFloor(_floor, use: _filterUse))
+        if (stall.hasMenu) stall,
+    ]);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,

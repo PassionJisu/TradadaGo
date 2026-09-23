@@ -9,6 +9,8 @@ import 'package:foodridge/screens/login_screen.dart';
 import 'package:foodridge/screens/my_page_screen.dart';
 import 'package:foodridge/screens/reservations_screen.dart';
 import 'package:foodridge/data/sangju_indoor_map.dart';
+import 'package:foodridge/models/reservation.dart';
+import 'package:foodridge/models/store.dart';
 import 'package:foodridge/state/app_session.dart';
 import 'package:foodridge/widgets/tradada_bottom_nav.dart';
 
@@ -60,11 +62,11 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: CommunityScreen()));
     await tester.tap(find.text('충장로막내').first);
     await tester.pumpAndSettle();
-    expect(find.text('가게로 이동'), findsOneWidget);
+    expect(find.text('식당으로 이동'), findsOneWidget);
     expect(find.text('이 가게 리뷰 2개'), findsOneWidget);
     expect(find.text('양동단골'), findsOneWidget);
 
-    await tester.tap(find.text('가게로 이동'));
+    await tester.tap(find.text('식당으로 이동'));
     await tester.pumpAndSettle();
     expect(find.text('마감할인 상품'), findsOneWidget);
     expect(find.text('홍어모둠 마감세트'), findsOneWidget);
@@ -95,15 +97,32 @@ void main() {
     expect(find.text('양동시장'), findsWidgets);
   });
 
+  void _reserve(Store store) {
+    final product = store.products.first;
+    AppSession.instance.reserveFoods(
+      store: store,
+      items: [
+        ReservedItem(
+          name: product.name,
+          unitPrice: product.discountPrice,
+          quantity: 2,
+        ),
+      ],
+    );
+  }
+
   testWidgets('QR visit appears in usage history with review', (tester) async {
     final store = GwangjuMarkets.yangdong.stores.first;
-    AppSession.instance.markQrVerified(store);
-    AppSession.instance.markQrVerified(store);
+    _reserve(store);
+    expect(AppSession.instance.markQrVerified(store), isTrue);
+    _reserve(store);
+    expect(AppSession.instance.markQrVerified(store), isTrue);
 
     await tester.pumpWidget(const MaterialApp(home: ReservationsScreen()));
     expect(find.text('이용내역'), findsOneWidget);
     expect(find.text(store.name), findsNWidgets(2));
-    expect(find.text('QR 방문 인증'), findsNWidgets(2));
+    expect(find.textContaining('QR 수령 완료'), findsNWidgets(2));
+    expect(find.textContaining('× 2'), findsWidgets);
     expect(find.text('포토 리뷰 쓰기'), findsNWidgets(2));
     expect(find.text('포토 리뷰 더 남기기'), findsNothing);
     expect(find.textContaining(AppSession.instance.reservations.first.timeLabel), findsWidgets);
@@ -112,7 +131,8 @@ void main() {
 
   testWidgets('usage history opens a written review', (tester) async {
     final store = GwangjuMarkets.yangdong.stores.first;
-    AppSession.instance.markQrVerified(store);
+    _reserve(store);
+    expect(AppSession.instance.markQrVerified(store), isTrue);
     final visit = AppSession.instance.unreviewedQrVisit(store.id)!;
     AppSession.instance.addPhotoReview(
       store: store,

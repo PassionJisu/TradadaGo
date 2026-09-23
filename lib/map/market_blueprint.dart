@@ -61,6 +61,19 @@ extension StallUseStyle on StallUse {
     _ => true,
   };
 
+  /// 시장 데모에서 정보·카테고리·핀을 여는 음식 업종.
+  bool get isFood => switch (this) {
+    StallUse.seafood ||
+    StallUse.dried ||
+    StallUse.produce ||
+    StallUse.meat ||
+    StallUse.food ||
+    StallUse.snack ||
+    StallUse.sidedish ||
+    StallUse.riceCake => true,
+    _ => false,
+  };
+
   Color get color => switch (this) {
     StallUse.seafood => const Color(0xFF4A9FE0),
     StallUse.dried => const Color(0xFF7C97AF),

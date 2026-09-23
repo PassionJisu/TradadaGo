@@ -1,12 +1,10 @@
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../config/assets.dart';
 import '../data/sangju_indoor_map.dart';
+import '../map/alley_route.dart';
 import '../map/indoor_camera.dart';
 import '../map/market_blueprint.dart';
 import '../map/sangju_indoor_painter.dart';
@@ -15,6 +13,7 @@ import '../models/indoor_stall.dart';
 import 'qr_scan_screen.dart';
 import 'store_detail_screen.dart';
 import '../state/app_session.dart';
+import '../state/indoor_qr_cue.dart';
 import '../theme/app_colors.dart';
 import '../util/app_notice.dart';
 import '../widgets/market_map_controls.dart';
@@ -43,11 +42,10 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
   StallUse? _filterUse;
   late final AnimationController _pulse;
   late final Ticker _walk;
-  Timer? _locateTimer;
-  IndoorStall? _locateStall;
-  Offset? _homeFocus;
-  double? _homeScale;
-  double? _homeRotation;
+  final _backdrop = IndoorMapBackdrop();
+  IndoorStall? _routeStall;
+  bool _browsing = false;
+  Duration? _lastWalkFrame;
 
   double _startScale = 1;
   double _startRotation = 0;
@@ -61,6 +59,18 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     )..repeat(reverse: true);
     _walk = createTicker(_onWalk)..start();
     _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askAvatarOnce());
+  }
+
+  Future<void> _askAvatarOnce() async {
+    if (!mounted || AppSession.instance.demoAvatarGender != null) return;
+    final choice = await showDialog<DemoAvatarGender>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const _AvatarChoiceDialog(),
+    );
+    if (!mounted || choice == null) return;
+    AppSession.instance.chooseDemoAvatar(choice);
   }
 
   Future<void> _load() async {
@@ -75,27 +85,29 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
       );
       _walker = IndoorPathWalker(data.demoWalkPath);
     });
+    _syncNearby();
     await StorePinImages.ensureLoaded();
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _locateTimer?.cancel();
+    IndoorQrCue.instance.clear();
+    _backdrop.dispose();
     _pulse.dispose();
     _walk.dispose();
     super.dispose();
   }
 
-  void _onWalk(Duration _) {
+  void _onWalk(Duration elapsed) {
     final camera = _camera;
     final walker = _walker;
-    if (camera == null ||
-        walker == null ||
-        !walker.walking ||
-        _locateStall != null) {
+    if (camera == null || walker == null || !walker.walking) return;
+    final last = _lastWalkFrame;
+    if (last != null && elapsed - last < const Duration(milliseconds: 33)) {
       return;
     }
+    _lastWalkFrame = elapsed;
     final next = walker.tick();
     if (next != null) {
       camera.focus = next;
@@ -110,11 +122,8 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     final camera = _camera;
     final walker = _walker;
     if (data == null || camera == null || walker == null) return;
-    _locateTimer?.cancel();
-    _locateStall = null;
-    _homeFocus = null;
-    _homeScale = null;
-    _homeRotation = null;
+    _browsing = false;
+    camera.follow();
     walker.start();
     camera.focus = walker.position;
     camera.clampFocus();
@@ -204,12 +213,16 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     final camera = _camera;
     final data = _data;
     if (camera == null || data == null) return;
-    final hit = camera.nearest(camera.focus, data.stallsOnFloor(_floor));
-    if (hit != null && _filterUse != null && hit.use != _filterUse) {
-      _nearby = null;
-      return;
-    }
-    _nearby = hit;
+    final menus = [
+      for (final stall in data.stallsOnFloor(_floor))
+        if (stall.hasMenu && (_filterUse == null || stall.use == _filterUse))
+          stall,
+    ];
+    _nearby = camera.nearest(camera.focus, menus);
+    IndoorQrCue.instance.setReady(
+      ready: _nearby != null,
+      storeName: _nearby?.name,
+    );
   }
 
   void _onScaleStart(ScaleStartDetails details) {
@@ -221,12 +234,15 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
 
   void _onScaleUpdate(ScaleUpdateDetails details, Size viewport) {
     final camera = _camera;
-    if (camera == null || details.pointerCount < 2 || _locateStall != null) {
-      return;
+    if (camera == null) return;
+    if (details.pointerCount >= 2) {
+      camera.scale = _startScale * details.scale;
+      camera.rotation = _startRotation + details.rotation;
+      camera.clampScale(viewport);
+    } else if (details.pointerCount == 1) {
+      _browsing = true;
+      camera.panByScreen(details.focalPointDelta);
     }
-    camera.scale = _startScale * details.scale;
-    camera.rotation = _startRotation + details.rotation;
-    camera.clampScale(viewport);
     _syncNearby();
     setState(() {});
   }
@@ -237,30 +253,39 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     if (camera == null || data == null) return;
     final world = camera.screenToWorld(details.localPosition, viewport);
     final stall = camera.hit(world, data.stallsOnFloor(_floor));
-    if (stall == null) return;
+    if (stall == null || !stall.hasMenu) return;
     if (_filterUse != null && stall.use != _filterUse) return;
     _showStall(stall);
   }
 
   void openNearbyStamp() {
     final stall = _nearby;
-    if (stall == null) {
-      showAppNotice(context, '가게 칸이 켜질 때까지 골목을 걸어주세요.');
+    if (stall == null || !stall.hasMenu) {
+      showAppNotice(context, '핀이 켜진 식당 앞으로 이동한 뒤 다시 눌러주세요.');
       return;
     }
     _openQr(stall);
   }
 
   void _openQr(IndoorStall stall) {
+    if (!stall.hasMenu || _nearby?.id != stall.id) {
+      showAppNotice(context, '가게 앞에서만 QR 인증이 됩니다.');
+      return;
+    }
+    if (AppSession.instance.activeReservation(stall.id) == null) {
+      showAppNotice(context, '이 식당을 먼저 예약한 뒤 QR을 인증할 수 있습니다.');
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => QrScanScreen(store: stall.asStore()),
+        builder: (_) => QrScanScreen(store: stall.asStore(qrUnlocked: true)),
       ),
     );
   }
 
   void _showStall(IndoorStall stall) {
     final verified = AppSession.instance.hasQrVerified(stall.id);
+    final qrEnabled = stall.hasMenu && _nearby?.id == stall.id;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -271,21 +296,90 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
         return IndoorStallSheet(
           stall: stall,
           verified: verified,
-          onScanQr: () {
-            Navigator.pop(ctx);
-            _openQr(stall);
-          },
-          onOpenStore: () {
-            Navigator.pop(ctx);
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => StoreDetailScreen(store: stall.asStore()),
-              ),
-            );
-          },
+          qrEnabled: qrEnabled,
+          onScanQr: qrEnabled
+              ? () {
+                  Navigator.pop(ctx);
+                  _openQr(stall);
+                }
+              : null,
+          onFind: stall.hasMenu
+              ? () {
+                  Navigator.pop(ctx);
+                  _startFind(stall);
+                }
+              : null,
+          onOpenStore: stall.hasMenu
+              ? () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => StoreDetailScreen(
+                        store: stall.asStore(qrUnlocked: qrEnabled),
+                      ),
+                    ),
+                  );
+                }
+              : null,
         );
       },
     );
+  }
+
+  void _startFind(IndoorStall stall) {
+    final camera = _camera;
+    if (camera == null || !stall.hasMenu) return;
+    final mid = Offset.lerp(camera.focus, stall.bounds.center, 0.45)!;
+    setState(() {
+      _routeStall = stall;
+      _browsing = true;
+      camera.lookAt(mid);
+    });
+  }
+
+  void _cancelFind() {
+    setState(() {
+      _routeStall = null;
+      _browsing = false;
+      _camera?.follow();
+    });
+  }
+
+  Future<void> _selectFloor(String id) async {
+    final next = int.parse(id);
+    if (next != _floor) {
+      final goingUp = next > _floor;
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('$next층으로 이동하시겠습니까?'),
+          content: Text(
+            goingUp
+                ? '2층은 둘러보기용입니다. 대부분 가게 정보는 이 데모에서 아직 열리지 않았습니다.'
+                : '1층 시장 지도로 돌아갑니다.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('이동'),
+            ),
+          ],
+        ),
+      );
+      if (go != true || !mounted) return;
+    }
+    _walker?.stop();
+    _resumeAvatarPulse();
+    setState(() {
+      _floor = next;
+      _filterUse = null;
+      _routeStall = null;
+      _syncNearby();
+    });
   }
 
   @override
@@ -304,15 +398,12 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
           : LayoutBuilder(
               builder: (context, constraints) {
                 final viewport = Size(constraints.maxWidth, constraints.maxHeight);
-                if (_locateStall == null) {
-                  camera.clampScale(viewport);
-                  camera.clampFocus();
-                }
-                final origin = _locateStall != null && _homeFocus != null
-                    ? camera.worldToScreen(_homeFocus!, viewport)
-                    : camera.characterScreen(viewport);
+                camera.clampScale(viewport);
+                camera.clampFocus();
+                final origin = camera.worldToScreen(camera.focus, viewport);
                 final paintedIds = AppSession.instance.paintedStoreIds;
-                final painted = data.stalls
+                final restaurants = data.restaurants;
+                final painted = restaurants
                     .where((stall) => paintedIds.contains(stall.id))
                     .length;
                 return Stack(
@@ -354,7 +445,17 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                               pad: data.pad,
                               scale: camera.scale,
                               matrix: camera.mapMatrix(viewport),
-                              highlightId: _locateStall?.id ?? _nearby?.id,
+                              highlightId: _nearby?.id,
+                              routeId: _routeStall?.id,
+                              activePinId: _nearby?.id,
+                              guide: _routeStall == null
+                                  ? const []
+                                  : alleyRoute(
+                                      path: data.demoWalkPath,
+                                      from: camera.focus,
+                                      to: _routeStall!.bounds.center,
+                                    ),
+                              backdrop: _backdrop,
                               floorFilter: _floor,
                               useFilter: _filterUse,
                               visitedIds: Set<String>.of(paintedIds),
@@ -371,14 +472,34 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                       alignment: Alignment.topCenter,
                       child: SafeArea(
                         bottom: false,
-                        child: _hud(data, camera, viewport),
+                        child: _hud(data),
                       ),
                     ),
                     Positioned(
                       left: 16,
                       right: 16,
                       bottom: safeBottom + navClearance + 40,
-                      child: _demoWalkBar(),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (_browsing)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: FilledButton.tonalIcon(
+                                onPressed: () {
+                                  setState(() {
+                                    _browsing = false;
+                                    _camera?.follow();
+                                  });
+                                },
+                                icon: const Icon(Icons.my_location_rounded, size: 18),
+                                label: const Text('내 캐릭터'),
+                              ),
+                            ),
+                          _demoWalkBar(),
+                        ],
+                      ),
                     ),
                     Positioned(
                       left: 16,
@@ -386,7 +507,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                       bottom: safeBottom + 64,
                       child: PaintProgressBanner(
                         painted: painted,
-                        total: data.stalls.length,
+                        total: restaurants.length,
                         compact: true,
                       ),
                     ),
@@ -399,10 +520,11 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     );
   }
 
-  void _openIndex(SangjuIndoorMap data, IndoorCamera camera, Size viewport) {
-    final listed = data.uniqueNamed(
-      data.stallsOnFloor(_floor, use: _filterUse),
-    );
+  void _openIndex(SangjuIndoorMap data) {
+    final listed = data.uniqueNamed([
+      for (final stall in data.stallsOnFloor(_floor, use: _filterUse))
+        if (stall.hasMenu) stall,
+    ]);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -427,7 +549,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  '이름을 누르면 지도에서 위치를 잠시 보여줍니다.',
+                  '수산·청과·다과·먹거리처럼 정보가 있는 식품 가게는, 안내에서 위치 찾기를 누르면 복도를 따라 선이 이어집니다.',
                   style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                 ),
                 const SizedBox(height: 8),
@@ -442,10 +564,14 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                       stall.name,
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                    subtitle: Text('${stall.floor}층 · ${stall.use.labelKo}'),
+                    subtitle: Text(
+                      stall.hasMenu
+                          ? '${stall.floor}층 · ${stall.use.labelKo}'
+                          : '${stall.floor}층 · 정보 준비 중',
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
-                      _peekStall(stall, camera, viewport);
+                      _showStall(stall);
                     },
                   ),
               ],
@@ -456,88 +582,97 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
     );
   }
 
-  void _peekStall(IndoorStall stall, IndoorCamera camera, Size viewport) {
-    _walker?.stop();
-    _resumeAvatarPulse();
-    _locateTimer?.cancel();
-    _homeFocus ??= camera.focus;
-    _homeScale ??= camera.scale;
-    _homeRotation ??= camera.rotation;
-
-    final origin = _homeFocus!;
-    final target = stall.bounds.center;
-    final span = (target - origin).distance;
-    final fit = math.min(
-      viewport.width / camera.mapSize.width,
-      viewport.height / camera.mapSize.height,
-    );
-    final desired =
-        math.min(viewport.width, viewport.height) / (span * 1.7 + 240);
-    camera.focus = Offset.lerp(origin, target, 0.5)!;
-    camera.scale = desired.clamp(fit, _homeScale!);
-    camera.rotation = 0;
-    _locateStall = stall;
-    setState(() {});
-
-    _locateTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      final cam = _camera;
-      if (cam != null) {
-        cam.focus = _homeFocus ?? cam.focus;
-        cam.scale = _homeScale ?? cam.scale;
-        cam.rotation = _homeRotation ?? cam.rotation;
-      }
-      _homeFocus = null;
-      _homeScale = null;
-      _homeRotation = null;
-      _locateStall = null;
-      _syncNearby();
-      setState(() {});
-    });
-  }
-
   Widget _avatar(Offset origin, IndoorCamera camera) {
     final size = camera.avatarScreenSize();
     final shadow = camera.avatarShadowScreenSize();
     final bounce = 3 * camera.scale / IndoorCamera.referenceScale;
+    const rim = 3.2;
     return Positioned(
-      left: origin.dx - size.width / 2,
-      top: origin.dy - size.height + shadow.height,
+      left: origin.dx - (size.width + rim) / 2,
+      top: origin.dy - size.height - rim / 2 + shadow.height,
       child: IgnorePointer(
         child: AnimatedBuilder(
           animation: _pulse,
           builder: (context, child) {
             return Transform.translate(
               offset: Offset(0, -bounce * _pulse.value),
-              child: child,
+              child: Column(
+                children: [
+                  child!,
+                  Container(
+                    width: size.width * 0.7,
+                    height: shadow.height * 1.7,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF6D0).withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.gold.withValues(alpha: 0.7),
+                          blurRadius: 7,
+                          spreadRadius: 0.4,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             );
           },
-          child: Column(
-            children: [
-              Image.asset(
-                AppAssets.playAvatar,
-                key: const Key('indoor-avatar'),
-                width: size.width,
-                height: size.height,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-              ),
-              Container(
-                width: shadow.width,
-                height: shadow.height,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ],
+          child: _outlinedAvatar(
+            AppSession.instance.playAvatarAsset,
+            size,
           ),
         ),
       ),
     );
   }
 
-  Widget _hud(SangjuIndoorMap data, IndoorCamera camera, Size viewport) {
+  Widget _outlinedAvatar(String asset, Size size) {
+    Widget silhouette(Offset offset) {
+      return Transform.translate(
+        offset: offset,
+        child: Image.asset(
+          asset,
+          width: size.width,
+          height: size.height,
+          fit: BoxFit.contain,
+          color: const Color(0xFFFFF8E1),
+          colorBlendMode: BlendMode.srcIn,
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: size.width + 4,
+      height: size.height + 4,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          for (final offset in const [
+            Offset(-1.7, 0),
+            Offset(1.7, 0),
+            Offset(0, -1.7),
+            Offset(0, 1.7),
+            Offset(-1.2, -1.2),
+            Offset(1.2, -1.2),
+            Offset(-1.2, 1.2),
+            Offset(1.2, 1.2),
+          ])
+            silhouette(offset),
+          Image.asset(
+            asset,
+            key: const Key('indoor-avatar'),
+            width: size.width,
+            height: size.height,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hud(SangjuIndoorMap data) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(
@@ -573,7 +708,7 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                               ? '내부 지도 · 골목 시연 일시정지'
                               : _walker?.running == true
                                   ? '내부 지도 · 골목 시연 경로 이동 중'
-                                  : '내부 지도 · 점포 ${data.stalls.length}곳 · 캐릭터 고정',
+                                  : '내부 지도 · 식품 ${data.restaurants.length}곳 · 캐릭터 고정',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -599,49 +734,53 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                 context: context,
                 uses: data.usesOnFloor(_floor),
                 selected: _filterUse,
-                onSelected: (use) => setState(() => _filterUse = use),
+                onSelected: (use) => setState(() {
+                  _filterUse = use;
+                  _syncNearby();
+                }),
               ),
               onFloor: () => showFloorPicker(
                 context: context,
                 floors: data.floors,
                 selectedId: '$_floor',
-                onSelected: (id) => setState(() {
-                  _walker?.stop();
-                  _resumeAvatarPulse();
-                  _floor = int.parse(id);
-                  _filterUse = null;
-                  _syncNearby();
-                }),
+                onSelected: _selectFloor,
               ),
-              onStores: () => _openIndex(data, camera, viewport),
+              onStores: () => _openIndex(data),
             ),
           ),
-          if (_locateStall != null)
+          if (_routeStall != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Material(
                 color: AppColors.gold,
                 borderRadius: BorderRadius.circular(14),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    '${_locateStall!.name} · 여기',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.navy,
-                    ),
+                  padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${_routeStall!.name} 찾는 중',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _cancelFind,
+                        child: const Text('식당 찾기 취소'),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            )
-          else if (_nearby != null)
+            ),
+          if (_nearby != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Material(
-                color: AppColors.gold,
+                color: AppColors.navy,
                 borderRadius: BorderRadius.circular(14),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
@@ -649,13 +788,14 @@ class SangjuIndoorMapScreenState extends State<SangjuIndoorMapScreen>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 8,
+                      vertical: 10,
                     ),
                     child: Text(
-                      '${_nearby!.name} · 탭해서 보기',
+                      '${_nearby!.name} QR 인증이 활성화되었습니다. 가운데 버튼을 눌러 인증을 시도하세요!',
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
-                        color: AppColors.navy,
+                        color: Colors.white,
+                        height: 1.35,
                       ),
                     ),
                   ),
@@ -673,14 +813,18 @@ class IndoorStallSheet extends StatelessWidget {
     super.key,
     required this.stall,
     required this.verified,
-    required this.onScanQr,
+    this.qrEnabled = false,
+    this.onScanQr,
     this.onOpenStore,
+    this.onFind,
   });
 
   final IndoorStall stall;
   final bool verified;
-  final VoidCallback onScanQr;
+  final bool qrEnabled;
+  final VoidCallback? onScanQr;
   final VoidCallback? onOpenStore;
+  final VoidCallback? onFind;
 
   @override
   Widget build(BuildContext context) {
@@ -702,43 +846,78 @@ class IndoorStallSheet extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text('${stall.floor}층 · ${stall.use.labelKo}'),
-          if (product != null) ...[
+          if (!stall.hasMenu) ...[
+            const SizedBox(height: 12),
+            const Text(
+              '아직 가게 정보가 구현되지 않았습니다.',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '데모 버전에서는 사진이 맞는 일부 음식 가게만 열려 있습니다.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+          ] else ...[
+            if (product != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                '마감할인  ${product.name}  ·  ${_won(product.discountPrice)}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.pinRed,
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             Text(
-              '마감할인  ${product.name}  ·  ${_won(product.discountPrice)}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: AppColors.pinRed,
-              ),
+              verified
+                  ? '이전에 수령한 식당입니다. 다시 먹으려면 메뉴를 새로 예약하세요.'
+                  : qrEnabled
+                      ? '식당 앞입니다. 메뉴를 예약한 뒤에만 QR 인증과 리뷰가 됩니다.'
+                      : '가게 앞에서만 QR 인증이 됩니다. 예약은 미리 할 수 있습니다.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
             ),
-          ],
-          const SizedBox(height: 10),
-          Text(
-            verified
-                ? '이미 QR 인증한 점포입니다. 다시 찍으면 이용내역에 방문이 추가되고, 방문당 리뷰는 1회입니다.'
-                : '지도 핀이 없는 내부 점포도 QR 인증과 마감할인 예약이 됩니다.',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(height: 14),
-          if (onOpenStore != null && store.products.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            if (onFind != null) ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onFind,
+                  icon: const Icon(Icons.route_rounded),
+                  label: const Text('이 시장 위치 찾기'),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (onOpenStore != null) ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: onOpenStore,
+                  child: const Text('가게·상품 자세히 보기'),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton(
-                onPressed: onOpenStore,
-                child: const Text('가게·상품 자세히 보기'),
+              child: FilledButton.icon(
+                onPressed: qrEnabled ? onScanQr : null,
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: Text(
+                  qrEnabled
+                      ? (verified ? 'QR 다시 인증하기' : 'QR 인증하기')
+                      : '가게 앞에서만 QR 인증이 됩니다',
+                ),
               ),
             ),
-            const SizedBox(height: 8),
           ],
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onScanQr,
-              icon: const Icon(Icons.qr_code_scanner_rounded),
-              label: Text(verified ? 'QR 다시 인증하기' : 'QR 인증하기'),
-            ),
-          ),
         ],
       ),
     );
@@ -753,6 +932,97 @@ class IndoorStallSheet extends StatelessWidget {
       if (left > 1 && left % 3 == 1) buf.write(',');
     }
     return '$buf' '원';
+  }
+}
+
+class _AvatarChoiceDialog extends StatelessWidget {
+  const _AvatarChoiceDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.cream,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '남성인가요, 여성인가요?',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.jua(fontSize: 24, color: AppColors.navy),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '시장 데모에 처음 들어올 때 한 번 고릅니다.\n가입할 때는 성별에 맞춰 아바타가 정해집니다.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.deepBlue),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _AvatarChoice(
+                    asset: AppAssets.playAvatar,
+                    label: '남성',
+                    onTap: () => Navigator.pop(context, DemoAvatarGender.male),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _AvatarChoice(
+                    asset: AppAssets.playAvatarFemale,
+                    label: '여성',
+                    onTap: () => Navigator.pop(context, DemoAvatarGender.female),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarChoice extends StatelessWidget {
+  const _AvatarChoice({
+    required this.asset,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String asset;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 12),
+          child: Column(
+            children: [
+              Image.asset(asset, height: 120, fit: BoxFit.contain),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.navy,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

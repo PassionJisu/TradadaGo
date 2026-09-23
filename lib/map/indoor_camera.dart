@@ -17,6 +17,9 @@ class IndoorCamera {
   double scale = startScale;
   double rotation = 0;
 
+  /// null이면 아바타를 따라가고, 값이 있으면 그 지점을 화면 가운데에 둔다.
+  Offset? look;
+
   static const referenceScale = 0.45;
   static const labelMinScale = 0.86;
   static const startScale = 1.1;
@@ -24,6 +27,10 @@ class IndoorCamera {
   static const avatarShadowSize = Size(9, 3);
 
   Size get worldSize => Size(mapSize.width + pad * 2, mapSize.height + pad * 2);
+
+  Offset get viewFocus => look ?? focus;
+
+  bool get isBrowsing => look != null;
 
   Offset characterScreen(Size viewport) =>
       Offset(viewport.width / 2, viewport.height * 0.62);
@@ -47,14 +54,28 @@ class IndoorCamera {
   }
 
   void clampFocus() {
-    final min = Offset(pad + 60, pad + 60);
+    focus = _clampToMarket(focus);
+  }
+
+  void follow() => look = null;
+
+  void lookAt(Offset world) {
+    look = _clampToMarket(world);
+  }
+
+  void panByScreen(Offset screenDelta) {
+    look = _clampToMarket(viewFocus - screenVectorToWorld(screenDelta));
+  }
+
+  Offset _clampToMarket(Offset point) {
+    final min = Offset(pad + 40, pad + 40);
     final max = Offset(
-      pad + mapSize.width - 60,
-      pad + mapSize.height - 60,
+      pad + mapSize.width - 40,
+      pad + mapSize.height - 40,
     );
-    focus = Offset(
-      focus.dx.clamp(min.dx, max.dx),
-      focus.dy.clamp(min.dy, max.dy),
+    return Offset(
+      point.dx.clamp(min.dx, max.dx),
+      point.dy.clamp(min.dy, max.dy),
     );
   }
 
@@ -74,12 +95,12 @@ class IndoorCamera {
   }
 
   Offset screenToWorld(Offset screen, Size viewport) {
-    return focus + screenVectorToWorld(screen - characterScreen(viewport));
+    return viewFocus + screenVectorToWorld(screen - characterScreen(viewport));
   }
 
   Offset worldToScreen(Offset world, Size viewport) {
     final origin = characterScreen(viewport);
-    final d = world - focus;
+    final d = world - viewFocus;
     final c = math.cos(rotation);
     final s = math.sin(rotation);
     return origin + Offset(d.dx * c - d.dy * s, d.dx * s + d.dy * c) * scale;
@@ -91,7 +112,7 @@ class IndoorCamera {
       ..translateByDouble(origin.dx, origin.dy, 0, 1)
       ..rotateZ(rotation)
       ..scaleByDouble(scale, scale, scale, 1)
-      ..translateByDouble(-focus.dx, -focus.dy, 0, 1);
+      ..translateByDouble(-viewFocus.dx, -viewFocus.dy, 0, 1);
   }
 
   IndoorStall? hit(Offset world, List<IndoorStall> stalls) {

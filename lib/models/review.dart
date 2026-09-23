@@ -9,6 +9,7 @@ class Review {
     required this.createdAt,
     this.likes = 0,
     this.isMine = false,
+    this.eatenFoods = const [],
   });
 
   final String id;
@@ -20,4 +21,7 @@ class Review {
   final DateTime createdAt;
   int likes;
   final bool isMine;
+  final List<String> eatenFoods;
+
+  String get eatenLabel => eatenFoods.join(' · ');
 }

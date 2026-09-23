@@ -5,7 +5,7 @@ import '../config/env.dart';
 import '../state/app_session.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_logo.dart';
-import 'home_shell.dart';
+import 'login_arrival_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeShell()),
+      MaterialPageRoute(builder: (_) => const LoginArrivalScreen()),
     );
   }
 

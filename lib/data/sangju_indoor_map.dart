@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../map/market_blueprint.dart';
 import '../models/indoor_stall.dart';
+import 'market_demo_shops.dart';
 import 'sangju_floor2.dart';
 
 class SangjuIndoorMap {
@@ -16,11 +17,20 @@ class SangjuIndoorMap {
 
   static const asset = 'assets/data/sangju_indoor_stalls.json';
   static const plazaPad = 1200.0;
+  /// 색칠 비율에 넣는 1층 식품 가게 수. 지도를 불러온 뒤에는 실제 칸 수를 쓴다.
   static int get publishedStallCount {
     final cached = _cached;
-    if (cached != null) return cached.stalls.length;
-    return 184 + SangjuFloor2.cells().length;
+    if (cached != null) return cached.restaurants.length;
+    return 182;
   }
+
+  List<IndoorStall> get restaurants => [
+        for (final stall in stalls)
+          if (stall.hasMenu) stall,
+      ];
+
+  static List<IndoorStall> get cachedRestaurants =>
+      _cached?.restaurants ?? const [];
 
   static SangjuIndoorMap? _cached;
 
@@ -77,7 +87,7 @@ class SangjuIndoorMap {
     final seen = <StallUse>{};
     return [
       for (final stall in stalls)
-        if (stall.floor == floor && stall.use.isFilterable && seen.add(stall.use))
+        if (stall.floor == floor && stall.hasMenu && seen.add(stall.use))
           stall.use,
     ]..sort((a, b) => a.labelKo.compareTo(b.labelKo));
   }
@@ -110,10 +120,18 @@ class SangjuIndoorMap {
       (raw['imageWidth'] as num).toDouble(),
       (raw['imageHeight'] as num).toDouble(),
     );
-    final stalls = <IndoorStall>[
+    final floor1 = <IndoorStall>[
       for (final item in raw['stalls'] as List)
         if (item is Map<String, dynamic> && item['floor'] != 2)
           _stall(item, plazaPad),
+    ];
+    var shopIndex = 0;
+    final stalls = <IndoorStall>[
+      for (final stall in floor1)
+        if (stall.floor == 1 && !indoorStallIsFacility(stall.name))
+          stall.withDemo(MarketDemoShops.at(shopIndex++))
+        else
+          stall,
       ..._floor2Stalls(plazaPad),
     ];
     return _cached = SangjuIndoorMap._(
@@ -166,20 +184,31 @@ class SangjuIndoorMap {
     if (name.contains('청과') ||
         name.contains('과일') ||
         name.contains('곶감') ||
-        name.contains('표고')) {
+        name.contains('표고') ||
+        name.contains('농장') ||
+        name.contains('농산')) {
       return StallUse.produce;
     }
     if (name.contains('한우') || name.contains('정육') || name.contains('고기')) {
       return StallUse.meat;
     }
     if (name.contains('반찬')) return StallUse.sidedish;
-    if (name.contains('떡') || name.contains('도넛') || name.contains('튀밥')) {
+    if (name.contains('두부')) return StallUse.sidedish;
+    if (name.contains('떡') ||
+        name.contains('도넛') ||
+        name.contains('튀밥') ||
+        name.contains('약과') ||
+        name.contains('한과') ||
+        name.contains('과자') ||
+        name.contains('다과')) {
       return StallUse.riceCake;
     }
     if (name.contains('식당') ||
         name.contains('국수') ||
         name.contains('치킨') ||
         name.contains('통닭') ||
+        name.contains('꼬치닭') ||
+        name.contains('닭마을') ||
         name.contains('만두') ||
         name.contains('순대') ||
         name.contains('국나라') ||

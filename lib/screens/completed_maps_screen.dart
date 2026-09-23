@@ -48,8 +48,17 @@ class _MarketRow extends StatelessWidget {
     final isDemo = market.id == GwangjuMarkets.malbau.id;
     final total =
         isDemo ? SangjuIndoorMap.publishedStallCount : market.stores.length;
+    final restaurantIds = {
+      for (final stall in SangjuIndoorMap.cachedRestaurants) stall.id,
+    };
     final painted = isDemo
-        ? session.paintedStoreIds.where((id) => id.startsWith('sj-')).length
+        ? session.paintedStoreIds
+            .where(
+              (id) => restaurantIds.isEmpty
+                  ? id.startsWith('sj-')
+                  : restaurantIds.contains(id),
+            )
+            .length
         : market.stores.where((s) => session.hasPainted(s.id)).length;
     final ready = isDemo || total > 0;
     return Material(

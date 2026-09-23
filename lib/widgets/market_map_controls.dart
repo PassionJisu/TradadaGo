@@ -286,8 +286,8 @@ Future<void> showFloorPicker({
                       ? const Icon(Icons.check_rounded, color: AppColors.navy)
                       : null),
               onTap: () {
-                onSelected(floor.id);
                 Navigator.pop(ctx);
+                onSelected(floor.id);
               },
             ),
         ],
